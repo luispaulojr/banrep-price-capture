@@ -77,11 +77,7 @@ public sealed class BanRepSdmxClient(HttpClient http)
 
         // "DTF semanal": como o PDF não lista um FLOW_ID weekly,
         // agregamos para semanal pegando a ultima observacao por semana ISO.
-        var weekly = daily
-            .GroupBy(d => IsoWeekKey(d.Date))
-            .Select(g => g.OrderBy(x => x.Date).Last())
-            .OrderBy(x => x.Date)
-            .ToList();
+        var weekly = AggregateWeeklyByIsoWeek(daily);
 
         return weekly;
     }
@@ -114,7 +110,7 @@ public sealed class BanRepSdmxClient(HttpClient http)
         return $"{AgencyId},{DtfDailyHistFlowId},{Version}/all/ALL/?{qs}";
     }
 
-    private static List<BanRepSeriesData> ParseSdmxGenericData(Stream xmlStream)
+    internal static List<BanRepSeriesData> ParseSdmxGenericData(Stream xmlStream)
     {
         var doc = XDocument.Load(xmlStream);
 
@@ -148,6 +144,15 @@ public sealed class BanRepSdmxClient(HttpClient http)
             .ToList();
 
         return obs;
+    }
+
+    internal static List<BanRepSeriesData> AggregateWeeklyByIsoWeek(IEnumerable<BanRepSeriesData> daily)
+    {
+        return daily
+            .GroupBy(d => IsoWeekKey(d.Date))
+            .Select(g => g.OrderBy(x => x.Date).Last())
+            .OrderBy(x => x.Date)
+            .ToList();
     }
 
     private static bool TryParseSdmxDate(string raw, out DateOnly date)

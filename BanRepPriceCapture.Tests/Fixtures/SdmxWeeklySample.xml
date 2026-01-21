@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<message:GenericData
+  xmlns:message="http://www.sdmx.org/resources/sdmxml/schemas/v2_1/message"
+  xmlns:generic="http://www.sdmx.org/resources/sdmxml/schemas/v2_1/data/generic">
+  <message:DataSet>
+    <generic:Series>
+      <generic:Obs>
+        <generic:ObsDimension value="2024-12-30" />
+        <generic:ObsValue value="11.000" />
+      </generic:Obs>
+      <generic:Obs>
+        <generic:ObsDimension value="2024-12-31" />
+        <generic:ObsValue value="11.100" />
+      </generic:Obs>
+      <generic:Obs>
+        <generic:ObsDimension value="2025-01-02" />
+        <generic:ObsValue value="11.200" />
+      </generic:Obs>
+      <generic:Obs>
+        <generic:ObsDimension value="2025-01-07" />
+        <generic:ObsValue value="11.500" />
+      </generic:Obs>
+    </generic:Series>
+  </message:DataSet>
+</message:GenericData>
