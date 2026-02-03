@@ -49,8 +49,10 @@ public sealed class SdmxParsingTests
         using var reader = new StreamReader(stream);
         var body = await reader.ReadToEndAsync();
 
-        var handler = new FakeHttpMessageHandler(_ =>
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new FakeHttpMessageHandler(request =>
         {
+            capturedRequest = request;
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(body)
@@ -59,16 +61,21 @@ public sealed class SdmxParsingTests
             return response;
         });
 
-        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://example.test/") };
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/") };
         var client = new BanRepSdmxClient(http);
 
-        var weekly = await client.GetDtWeeklyAsync();
+        var weekly = await client.GetDtWeeklyAsync(start: new DateOnly(2026, 2, 3));
 
         Assert.Equal(2, weekly.Count);
         Assert.Equal(new DateOnly(2025, 1, 2), weekly[0].Date);
         Assert.Equal(11.2m, weekly[0].Value);
         Assert.Equal(new DateOnly(2025, 1, 7), weekly[1].Date);
         Assert.Equal(11.5m, weekly[1].Value);
+
+        var requestUri = capturedRequest?.RequestUri?.ToString();
+        Assert.Equal(
+            "https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/ESTAT,DF_DTF_DAILY_HIST,1.0/all/ALL/?startPeriod=2025&endPeriod=2027&dimensionAtObservation=TIME_PERIOD&detail=full",
+            requestUri);
     }
 
     private static FileStream OpenFixture(string name)
