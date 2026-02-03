@@ -45,7 +45,7 @@ public sealed class SdmxParsingTests
     [Fact]
     public async Task GetDtWeeklyAsync_UsesSdmxResponseFromHttpHandler()
     {
-        using var stream = OpenFixture("SdmxWeeklySample.xml");
+        await using var stream = OpenFixture("SdmxWeeklySample.xml");
         using var reader = new StreamReader(stream);
         var body = await reader.ReadToEndAsync();
 
@@ -61,7 +61,8 @@ public sealed class SdmxParsingTests
             return response;
         });
 
-        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/") };
+        using var http = new HttpClient(handler);
+        http.BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/");
         var client = new BanRepSdmxClient(http);
 
         var weekly = await client.GetDtWeeklyAsync(start: new DateOnly(2026, 2, 3));
