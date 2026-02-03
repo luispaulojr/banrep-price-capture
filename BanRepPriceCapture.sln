@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BanRepPriceCapture.DtfWeeklyPoc", "BanRepPriceCapture.DtfWeeklyPoc\BanRepPriceCapture.DtfWeeklyPoc.csproj", "{1DCD9964-C908-4ECA-9BAB-3BE666B351E3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BanRepPriceCapture.Tests", "BanRepPriceCapture.Tests\BanRepPriceCapture.Tests.csproj", "{44E6849F-6E46-4EF0-BB65-247493926CBC}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{37DF2A61-D5FA-4201-8EE0-C2AD12FBB368}"
 	ProjectSection(SolutionItems) = preProject
 		.dockerignore = .dockerignore
@@ -19,5 +21,9 @@ Global
 		{1DCD9964-C908-4ECA-9BAB-3BE666B351E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1DCD9964-C908-4ECA-9BAB-3BE666B351E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1DCD9964-C908-4ECA-9BAB-3BE666B351E3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{44E6849F-6E46-4EF0-BB65-247493926CBC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{44E6849F-6E46-4EF0-BB65-247493926CBC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{44E6849F-6E46-4EF0-BB65-247493926CBC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{44E6849F-6E46-4EF0-BB65-247493926CBC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
