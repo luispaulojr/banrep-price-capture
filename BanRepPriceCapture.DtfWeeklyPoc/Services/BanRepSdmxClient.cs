@@ -75,11 +75,8 @@ public sealed class BanRepSdmxClient(HttpClient http)
         // A documentação explica que TIME_PERIOD é a dimensão do tempo e OBS_VALUE é o valor.
         var daily = ParseSdmxGenericData(stream);
 
-        // "DTF semanal": como o PDF não lista um FLOW_ID weekly,
-        // agregamos para semanal pegando a ultima observacao por semana ISO.
-        var weekly = AggregateWeeklyByIsoWeek(daily);
-
-        return weekly;
+        // Mantemos a granularidade diaria do SDMX sem agregacao.
+        return daily;
     }
 
     private static string BuildDtfUrl(DateOnly? start, DateOnly? end)
@@ -180,14 +177,6 @@ public sealed class BanRepSdmxClient(HttpClient http)
             NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
             CultureInfo.InvariantCulture,
             out value);
-    }
-
-    private static string IsoWeekKey(DateOnly date)
-    {
-        var dt = date.ToDateTime(TimeOnly.MinValue);
-        var week = ISOWeek.GetWeekOfYear(dt);
-        var year = ISOWeek.GetYear(dt);
-        return $"{year:D4}-W{week:D2}";
     }
 
     private static async Task<string?> SafeReadBody(HttpResponseMessage resp, CancellationToken ct)

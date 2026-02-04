@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using BanRepPriceCapture.DtfWeeklyPoc.Models;
 using BanRepPriceCapture.DtfWeeklyPoc.Services;
 using Xunit;
 
@@ -23,29 +22,9 @@ public sealed class SdmxParsingTests
     }
 
     [Fact]
-    public void AggregateWeeklyByIsoWeek_ReturnsLastObservationPerWeek()
-    {
-        var daily = new List<BanRepSeriesData>
-        {
-            new() { Date = new DateOnly(2024, 12, 30), Value = 11.0m },
-            new() { Date = new DateOnly(2024, 12, 31), Value = 11.1m },
-            new() { Date = new DateOnly(2025, 1, 2), Value = 11.2m },
-            new() { Date = new DateOnly(2025, 1, 7), Value = 11.5m }
-        };
-
-        var weekly = BanRepSdmxClient.AggregateWeeklyByIsoWeek(daily);
-
-        Assert.Equal(2, weekly.Count);
-        Assert.Equal(new DateOnly(2025, 1, 2), weekly[0].Date);
-        Assert.Equal(11.2m, weekly[0].Value);
-        Assert.Equal(new DateOnly(2025, 1, 7), weekly[1].Date);
-        Assert.Equal(11.5m, weekly[1].Value);
-    }
-
-    [Fact]
     public async Task GetDtWeeklyAsync_UsesSdmxResponseFromHttpHandler()
     {
-        await using var stream = OpenFixture("SdmxWeeklySample.xml");
+        using var stream = OpenFixture("SdmxWeeklySample.xml");
         using var reader = new StreamReader(stream);
         var body = await reader.ReadToEndAsync();
 
@@ -61,17 +40,20 @@ public sealed class SdmxParsingTests
             return response;
         });
 
-        using var http = new HttpClient(handler);
-        http.BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/");
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/") };
         var client = new BanRepSdmxClient(http);
 
-        var weekly = await client.GetDtWeeklyAsync(start: new DateOnly(2026, 2, 3));
+        var daily = await client.GetDtWeeklyAsync(start: new DateOnly(2026, 2, 3));
 
-        Assert.Equal(2, weekly.Count);
-        Assert.Equal(new DateOnly(2025, 1, 2), weekly[0].Date);
-        Assert.Equal(11.2m, weekly[0].Value);
-        Assert.Equal(new DateOnly(2025, 1, 7), weekly[1].Date);
-        Assert.Equal(11.5m, weekly[1].Value);
+        Assert.Equal(4, daily.Count);
+        Assert.Equal(new DateOnly(2024, 12, 30), daily[0].Date);
+        Assert.Equal(11.0m, daily[0].Value);
+        Assert.Equal(new DateOnly(2024, 12, 31), daily[1].Date);
+        Assert.Equal(11.1m, daily[1].Value);
+        Assert.Equal(new DateOnly(2025, 1, 2), daily[2].Date);
+        Assert.Equal(11.2m, daily[2].Value);
+        Assert.Equal(new DateOnly(2025, 1, 7), daily[3].Date);
+        Assert.Equal(11.5m, daily[3].Value);
 
         var requestUri = capturedRequest?.RequestUri?.ToString();
         Assert.Equal(
