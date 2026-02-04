@@ -66,7 +66,7 @@ public sealed class DtfDailyRabbitConsumer(
             logger.LogInformation(
                 method: "DtfDailyRabbitConsumer.HandleMessageAsync",
                 description: "Mensagem recebida.",
-                message: $"delivery={args.DeliveryTag} flow_id={flowId}");
+                message: $"delivery={args.DeliveryTag}");
 
             using var scope = scopeFactory.CreateScope();
             var workflow = scope.ServiceProvider.GetRequiredService<DtfDailyCaptureWorkflow>();
@@ -77,14 +77,14 @@ public sealed class DtfDailyRabbitConsumer(
             logger.LogInformation(
                 method: "DtfDailyRabbitConsumer.HandleMessageAsync",
                 description: "Mensagem processada com sucesso.",
-                message: $"flow_id={flowId}");
+                message: "processamento=ok");
         }
         catch (Exception ex)
         {
             logger.LogCritical(
                 method: "DtfDailyRabbitConsumer.HandleMessageAsync",
                 description: "Falha ao processar mensagem.",
-                message: $"flow_id={flowId} payload={body}",
+                message: $"payload={body}",
                 exception: ex);
             using var scope = scopeFactory.CreateScope();
             var workflow = scope.ServiceProvider.GetRequiredService<DtfDailyCaptureWorkflow>();

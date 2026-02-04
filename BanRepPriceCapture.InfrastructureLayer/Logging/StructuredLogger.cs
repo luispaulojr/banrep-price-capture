@@ -1,3 +1,4 @@
+using System.Text.Json;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
 using Microsoft.Extensions.Logging;
@@ -8,6 +9,8 @@ public sealed class StructuredLogger(
     ILogger<StructuredLogger> logger,
     IFlowContextAccessor flowContext) : IStructuredLogger
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     public void LogInformation(string method, string description, string? message = null)
         => Log(LogLevel.Information, method, description, message);
 
@@ -27,25 +30,25 @@ public sealed class StructuredLogger(
         string? message = null,
         Exception? exception = null)
     {
-        var payload = new Dictionary<string, object?>
-        {
-            ["Level"] = level.ToString(),
-            ["FlowId"] = flowContext.FlowId,
-            ["Method"] = method,
-            ["Description"] = description
-        };
+        var payload = new StructuredLogEntry(
+            Level: level.ToString(),
+            FlowId: flowContext.FlowId,
+            Method: method,
+            Description: description,
+            Message: string.IsNullOrWhiteSpace(message) ? null : message,
+            Exception: exception?.Message,
+            ExceptionDetails: exception?.ToString());
 
-        if (!string.IsNullOrWhiteSpace(message))
-        {
-            payload["Message"] = message;
-        }
-
-        if (exception is not null)
-        {
-            payload["Exception"] = exception.Message;
-            payload["ExceptionDetails"] = exception.ToString();
-        }
-
-        logger.Log(level, exception, "{@Log}", payload);
+        var json = JsonSerializer.Serialize(payload, JsonOptions);
+        logger.Log(level, exception, "{LogJson}", json);
     }
+
+    private sealed record StructuredLogEntry(
+        string Level,
+        Guid FlowId,
+        string Method,
+        string Description,
+        string? Message,
+        string? Exception,
+        string? ExceptionDetails);
 }
