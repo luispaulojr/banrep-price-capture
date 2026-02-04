@@ -1,159 +1,174 @@
-# HELP
+# HELP — BanRepPriceCapture.Dtf Operations Guide
 
-Este documento descreve como configurar, executar e implantar o BanRep Price Capture.
-
-## Configuração
-
-A aplicação lê configurações em `appsettings.json`, arquivos de ambiente
-(`appsettings.dev.json`, `appsettings.uat.json`, etc.) e variáveis de ambiente.
-Em .NET, variáveis podem sobrescrever chaves usando o padrão `Section__Key`.
-
-### Principais chaves de configuração
-
-- **DtfDailyCapture**
-  - `QueueName`: fila RabbitMQ que dispara a captura diária.
-- **ExternalServices**
-  - `Notification:BaseUrl`: URL base do serviço de notificações (Teams).
-  - `Notification:SystemId`: identificador do sistema emissor.
-  - `Notification:TimeoutSeconds` / `Notification:Retry`: timeout e política de retry.
-  - `Sdmx:BaseUrl`: URL base do SDMX do BanRep.
-  - `Sdmx:TimeoutSeconds`: timeout do SDMX.
-  - `DtfDailyOutbound:BaseUrl`: URL base do endpoint de envio diário.
-  - `DtfDailyOutbound:Authentication:TokenEnvVar`: variável de ambiente com token Bearer.
-- **Database**
-  - `DatabaseName`: nome do banco PostgreSQL.
-  - `Port`: porta do PostgreSQL (padrão 5432).
-  - `EnableSsl`: habilita SSL nas conexões.
-- **DatabaseSecrets**
-  - `SecretId`: segredo no AWS Secrets Manager (opcional).
-  - `HostEnvVar`, `HostReadOnlyEnvVar`, `UsernameEnvVar`, `PasswordEnvVar`:
-    nomes das variáveis de ambiente usadas como fallback.
-- **RabbitMq**
-  - `HostName`, `Port`, `VirtualHost`: endpoint do RabbitMQ.
-  - `UserNameEnvVar`, `PasswordEnvVar`: variáveis para credenciais.
-- **AWS / AWSLogging**
-  - `AWS:Region`: região AWS.
-  - `AWSLogging:LogGroup` e `AWSLogging:LogStreamNamePrefix`: destino de logs.
-
-### Variáveis de ambiente relevantes
-
-- `BANREP_DB_HOST`
-- `BANREP_DB_HOST_RO`
-- `BANREP_DB_USERNAME`
-- `BANREP_DB_PASSWORD`
-- `BANREP_BEARER_TOKEN`
-- `BANREP_RABBITMQ_USERNAME`
-- `BANREP_RABBITMQ_PASSWORD`
+This guide explains how to configure, run, and operate BanRepPriceCapture.Dtf. It is intended for onboarding and production support.
 
 ---
 
-## AWS setup
-
-### Secrets Manager (banco de dados)
-
-- Se `DatabaseSecrets:SecretId` estiver configurado, a aplicação busca o segredo
-  via AWS Secrets Manager.
-- O segredo deve conter as chaves: `host`, `host_ro`, `username`, `password`.
-- Se o segredo estiver ausente ou incompleto, a aplicação faz fallback para as
-  variáveis de ambiente listadas acima.
-
-### CloudWatch Logs
-
-- O logging usa `AWS.Logger.AspNetCore` e envia logs ao CloudWatch.
-- Garanta permissões IAM para criar/editar o log group configurado.
-- Credenciais podem vir de IAM Role (ECS/EKS/EC2) ou variáveis padrão do SDK.
+## 1. Prerequisites
+1. **.NET SDK 10.0** (matches the project target framework).
+2. **RabbitMQ** accessible for the daily capture flow.
+3. **PostgreSQL** accessible for persistence.
+4. **AWS account access** with permissions for Secrets Manager and CloudWatch Logs.
+5. **Kubernetes (optional)** for running the provided manifests.
 
 ---
 
-## RabbitMQ setup
+## 2. Local Configuration
+### 2.1 Required environment variables
+The application relies on environment variables for credentials and secrets. At minimum, define the variables referenced in `DatabaseSecrets` and `RabbitMq` settings plus the outbound token environment variable.
 
-- Crie a fila definida em `DtfDailyCapture:QueueName` (padrão `dtf-daily`).
-- A aplicação consome mensagens com `autoAck=false` e faz `ACK/NACK` manual.
-- Configure:
-  - `RabbitMq:HostName`, `RabbitMq:Port`, `RabbitMq:VirtualHost`
-  - `BANREP_RABBITMQ_USERNAME` / `BANREP_RABBITMQ_PASSWORD`
+**Example list (values are placeholders):**
+```bash
+# Database secrets (used directly or via Secrets Manager fallback)
+export BANREP_DB_HOST=localhost
+export BANREP_DB_HOST_RO=localhost
+export BANREP_DB_USERNAME=banrep
+export BANREP_DB_PASSWORD=changeme
 
----
+# RabbitMQ credentials
+export BANREP_RABBITMQ_USERNAME=guest
+export BANREP_RABBITMQ_PASSWORD=guest
 
-## Database setup (PostgreSQL)
-
-A aplicação grava os registros diários na tabela `dtf_daily_prices`.
-Exemplo de estrutura recomendada:
-
-```sql
-create table if not exists dtf_daily_prices (
-  flow_id uuid not null,
-  data_capture timestamptz not null,
-  data_price date not null,
-  payload jsonb not null
-);
-
-create index if not exists idx_dtf_daily_prices_flow_price
-  on dtf_daily_prices (flow_id, data_price);
+# Outbound HTTP token
+export BANREP_BEARER_TOKEN=replace_me
 ```
 
-A inserção é idempotente por `(flow_id, data_price)` e usa JSONB para o payload.
+### 2.2 AWS credentials setup
+The AWS SDK uses the default credential chain (environment variables, shared credentials file, or IAM role). Configure whichever method is appropriate for your environment.
+
+### 2.3 Secrets Manager expectations
+If `DatabaseSecrets:SecretId` is set, the application expects a JSON secret with:
+- `host`
+- `host_ro`
+- `username`
+- `password`
+
+If any value is missing, the application falls back to the environment variables listed above.
 
 ---
 
-## Local run
+## 3. AppSettings Structure
+The ServiceLayer loads configuration in the following order (later entries override earlier ones):
+1. `appsettings.json`
+2. `appsettings.global.json` (optional)
+3. `appsettings.dev.json` (optional)
+4. `appsettings.uat.json` (optional)
+5. `appsettings.prod.json` (optional)
+6. `appsettings.{Environment}.json` (optional, e.g., `appsettings.Development.json`)
+7. Environment variables
 
-### Pré-requisitos
+### 3.1 ExternalServices structure
+`ExternalServices` is the primary grouping for outbound integrations.
 
-- .NET SDK 10.x
-- PostgreSQL acessível localmente
-- RabbitMQ em execução
+**Common fields**
+- `BaseUrl`: absolute base URL for the external service.
+- `SystemId`: identifier for this system (used in notifications).
+- `TimeoutSeconds`: HTTP timeout in seconds.
+- `Retry`:
+  - `MaxAttempts`: maximum number of attempts.
+  - `BackoffSeconds`: delay between attempts.
 
-### Passo a passo
+**Service-specific blocks in appsettings**
+- `ExternalServices:Notification`
+- `ExternalServices:Sdmx`
+- `ExternalServices:DtfDailyOutbound`
 
-1. Configure as variáveis de ambiente do banco, RabbitMQ e token Bearer.
-2. Atualize `ExternalServices:DtfDailyOutbound:BaseUrl` para o destino de envio do payload.
-3. Execute o serviço:
+> **Important:** Secrets are never stored in appsettings files. Use environment variables or AWS Secrets Manager.
 
+---
+
+## 4. ExternalServices – Notification
+### 4.1 Integration behavior
+- Uses an HTTP client that posts to a **fixed endpoint**: `/notificar`.
+- The base URL comes from `ExternalServices:Notification:BaseUrl`.
+- FlowId is sent as `CorrelationId` in the notification payload.
+
+### 4.2 Retry and failure behavior
+- Notification HTTP calls use the configured retry policy.
+- If the notification fails after retries, the error is logged and propagated.
+
+---
+
+## 5. RabbitMQ Flow
+1. A message arrives on the queue defined by `DtfDailyCapture:QueueName`.
+2. The consumer creates a **new service scope per message**.
+3. FlowId is parsed from the message `MessageId` and stored in the flow context.
+4. On success, the message is **ACKed**.
+5. On failure, a critical notification is emitted and the message is **NACKed** with requeue enabled.
+
+**Retry considerations**
+- Connection creation to RabbitMQ uses retry with backoff.
+- Message processing failures lead to requeue (expect repeated attempts until resolved).
+
+---
+
+## 6. Database
+### 6.1 PostgreSQL usage
+- The application persists daily observations to PostgreSQL in `dtf_daily_prices`.
+
+### 6.2 Dapper usage
+- Data access uses **Dapper** for executing SQL and mapping parameters.
+
+### 6.3 TypeHandlers
+- `DateOnly` and `TimeOnly` are registered with Dapper type handlers to ensure correct serialization.
+
+### 6.4 Persistence guarantees
+- Inserts are **idempotent** for `(flow_id, data_price)` using a conditional insert.
+
+---
+
+## 7. Running the Application
+### 7.1 Run locally (HTTP only)
+1. Configure environment variables and appsettings.
+2. Start the service:
 ```bash
 dotnet run --project BanRepPriceCapture.ServiceLayer
 ```
+3. Access endpoints:
+   - `GET /dtf-daily`
+   - `GET /dtf-weekly`
 
-Para habilitar Swagger localmente, use `ASPNETCORE_ENVIRONMENT=Development`.
+### 7.2 Run with RabbitMQ (daily capture)
+1. Ensure RabbitMQ is running and the queue exists.
+2. Start the service (same command as above).
+3. Publish a message to the queue to trigger processing.
+
+### 7.3 Run with mocked external services
+- Use local stub services and point `ExternalServices` base URLs to them.
+- The Notification service will use a stub implementation when `ExternalServices:Notification:BaseUrl` is not a valid URL, which is useful for local runs without notifications.
 
 ---
 
-## Deployment
+## 8. Health Checks
+### Available health endpoint
+- `GET /health`
 
-### Docker
+### What it validates
+- **Database** connectivity (simple query).
+- **RabbitMQ** connectivity.
+- **SDMX** connectivity.
 
-```bash
-docker build -t banrep-price-capture:local .
-docker run --rm -p 8080:8080 \
-  -e ASPNETCORE_URLS=http://+:8080 \
-  -e ASPNETCORE_ENVIRONMENT=Production \
-  -e BANREP_DB_HOST=... \
-  -e BANREP_DB_HOST_RO=... \
-  -e BANREP_DB_USERNAME=... \
-  -e BANREP_DB_PASSWORD=... \
-  -e BANREP_BEARER_TOKEN=... \
-  -e BANREP_RABBITMQ_USERNAME=... \
-  -e BANREP_RABBITMQ_PASSWORD=... \
-  banrep-price-capture:local
-```
+---
 
-### Kubernetes
+## 9. Kubernetes Deployment
+### Manifests
+- `kubernetes.dev.yaml`
+- `kubernetes.uat.yaml`
+- `kubernetes.prod.yaml`
 
-Os manifests `kubernetes.dev.yaml`, `kubernetes.uat.yaml` e `kubernetes.prod.yaml`
-contêm o deployment e o service. Ajuste a imagem e crie o Secret com as chaves:
+### Key considerations
+- Each manifest defines deployment, service, environment variables, resource limits, and health probes.
+- Secrets (database, RabbitMQ, and bearer token) are injected via environment variables.
 
-- `db-host`
-- `db-host-ro`
-- `db-username`
-- `db-password`
-- `bearer-token`
-- `rabbitmq-username`
-- `rabbitmq-password`
+---
 
-Depois aplique:
+## 10. Troubleshooting
+### Common startup issues
+- **Missing database secrets**: verify AWS Secrets Manager access or environment variables.
+- **RabbitMQ connectivity**: confirm host/port/credentials and that the queue exists.
+- **Notification service failures**: ensure `ExternalServices:Notification:BaseUrl` is reachable and supports `/notificar`.
 
-```bash
-kubectl apply -f kubernetes.dev.yaml
-```
-
-O health check está disponível em `/health`.
+### Using FlowId to trace problems
+- FlowId is logged in every structured log entry.
+- For HTTP requests, supply `X-Flow-Id` and search logs by FlowId.
+- For RabbitMQ, inspect the message `MessageId` to correlate processing attempts.

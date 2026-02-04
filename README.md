@@ -1,127 +1,61 @@
-# BanRep Price Capture
+# BanRepPriceCapture.Dtf
 
-## Visão geral
+## Application Identity
+BanRepPriceCapture.Dtf captures, processes, persists, and distributes the DTF rate from Banco de la República (Colombia) using SDMX. It exposes HTTP endpoints for daily/weekly series and runs an asynchronous daily capture flow that persists data and sends outbound notifications.
 
-O **BanRep Price Capture** captura, processa e expõe a taxa DTF publicada pelo
-Banco de la República da Colômbia por meio do SDMX. A aplicação consome o endpoint
-oficial, interpreta o XML retornado e disponibiliza os dados em dois formatos:
+## High-Level Architecture
+The solution follows a layered, modular architecture with inward-only dependencies:
 
-- Série diária da DTF
-- Série semanal da DTF (última observação de cada semana)
+- **ServiceLayer**: HTTP API, middleware, health checks, and composition (startup wiring).
+- **ApplicationLayer**: workflows/jobs that orchestrate use cases and coordinate domain operations.
+- **DomainLayer**: domain models shared across the application.
+- **InfrastructureLayer**: external integrations (SDMX, RabbitMQ, PostgreSQL, outbound HTTP, AWS).
+- **TestLayer**: automated tests.
 
-Além da API HTTP, o serviço possui um fluxo de captura diária acionado por fila
-RabbitMQ que persiste os dados em banco e envia o payload para um endpoint externo.
+**Dependency direction**: ServiceLayer → ApplicationLayer → DomainLayer, and InfrastructureLayer implements cross-cutting integrations consumed by ApplicationLayer. Dependencies only flow inward toward the DomainLayer.
 
----
+## Execution Flows
+### HTTP flow (daily and weekly endpoints)
+1. Request arrives at `/dtf-daily` or `/dtf-weekly`.
+2. `FlowIdMiddleware` reads `X-Flow-Id` and initializes the FlowId context.
+3. `DtfSeriesWorkflow` invokes `DtfDailyJob` or `DtfWeeklyJob`, which pull SDMX data and return the response.
+4. Errors are mapped to HTTP responses; unexpected failures trigger a notification.
 
-## Arquitetura (visão geral)
+### RabbitMQ asynchronous flow (daily capture)
+1. A message is published to the queue configured in `DtfDailyCapture:QueueName`.
+2. `DtfDailyRabbitConsumer` starts a scoped workflow per message and extracts FlowId from `MessageId`.
+3. `DtfDailyCaptureWorkflow` pulls SDMX daily data, persists each observation to PostgreSQL, and posts the payload to the outbound HTTP endpoint.
+4. On success, the consumer **ACKs** the message. On failure, it emits a critical notification and **NACKs** with requeue.
 
-O projeto segue uma arquitetura em camadas, com responsabilidades bem separadas:
+### FlowId generation and propagation
+- **HTTP**: FlowId is parsed from the `X-Flow-Id` header (if present).
+- **RabbitMQ**: FlowId is parsed from the message `MessageId` (if present).
+- **Propagation**: outgoing HTTP calls attach `X-Flow-Id`; notifications use FlowId as the correlation identifier.
 
-- **Service Layer**: API HTTP, health checks, middleware e composição de dependências.
-- **Application Layer**: workflows e jobs que orquestram as operações de negócio.
-- **Domain Layer**: modelos de domínio compartilhados.
-- **Infrastructure Layer**: integrações externas (SDMX, RabbitMQ, PostgreSQL,
-  outbound HTTP, AWS Secrets Manager e logging).
+### Retry behavior (high level)
+Transient errors are retried for SDMX, outbound HTTP, notification HTTP, database connections, and RabbitMQ connection creation. Retries use bounded attempts with backoff and produce structured warning logs.
 
-Integrações principais:
+## External Integrations
+- **SDMX (Banco de la República)** for DTF data.
+- **Notification Service** (Microsoft Teams via HTTP).
+- **RabbitMQ** for asynchronous daily capture.
+- **PostgreSQL** for persistence.
+- **AWS** (CloudWatch Logs and Secrets Manager).
 
-- **SDMX (BanRep)**: fonte oficial dos dados da DTF.
-- **PostgreSQL**: persistência dos registros diários.
-- **RabbitMQ**: dispara a captura diária por mensagem.
-- **Outbound HTTP**: entrega do payload diário a um endpoint configurado.
-- **AWS**: Secrets Manager para credenciais de banco e CloudWatch Logs para logging.
+## Configuration Overview
+The ServiceLayer reads `appsettings.json`, optional environment-specific files, and environment variables. Key settings are grouped under:
 
----
+- **ExternalServices**: SDMX, Notification, and outbound HTTP settings.
+- **Database** / **DatabaseSecrets**: database location, SSL, and secret resolution.
+- **RabbitMq**: broker connection and credential environment variables.
+- **AWS** / **AWSLogging**: region and log configuration.
 
-## Fluxos de execução
+Secrets are **never** stored in appsettings files; they are sourced from AWS Secrets Manager or environment variables.
 
-### 1) API HTTP (/dtf-daily e /dtf-weekly)
+## Observability
+- **Logging**: structured JSON logs with consistent fields (level, method, description, message, exception, and FlowId).
+- **FlowId correlation**: FlowId is emitted on logs and propagated across HTTP boundaries.
+- **Health checks**: `/health` validates SDMX connectivity, RabbitMQ connectivity, and PostgreSQL connectivity.
 
-1. Requisição chega ao endpoint HTTP.
-2. O workflow `DtfSeriesWorkflow` executa o job correspondente:
-   - `DtfDailyJob` para série diária
-   - `DtfWeeklyJob` para série semanal
-3. O job consulta o SDMX via `BanRepSdmxClient`.
-4. A resposta é transformada em JSON e devolvida ao cliente.
-
-### 2) Captura diária via RabbitMQ
-
-1. Uma mensagem é publicada na fila configurada (`DtfDailyCapture.QueueName`).
-2. O consumidor `DtfDailyRabbitConsumer` inicia o fluxo de captura.
-3. O workflow `DtfDailyCaptureWorkflow`:
-   - Consulta o SDMX para obter a série diária.
-   - Persiste cada registro no PostgreSQL.
-   - Envia o payload para o endpoint externo configurado.
-4. Em falha crítica, uma notificação é disparada e a mensagem é reencaminhada.
-
----
-
-## Fonte dos dados
-
-Os dados são obtidos via SDMX do Banco de la República. Cada `<generic:Obs>`
-representa uma observação diária, que é convertida para JSON sem alterar a
-granularidade original.
-
----
-
-## Endpoints disponíveis
-
-### GET /dtf-daily
-
-Retorna a série diária da taxa DTF. Cada dia presente no SDMX é representado
-individualmente no JSON, sem agregações adicionais.
-
-#### Exemplo de resposta
-
-```json
-{
-  "series": "DTF 90 dias (diária)",
-  "data": [
-    {
-      "date": "2026-02-02",
-      "value": 9.15
-    },
-    {
-      "date": "2026-02-03",
-      "value": 9.15
-    }
-  ]
-}
-```
-
----
-
-### GET /dtf-weekly
-
-Retorna a série semanal da taxa DTF, utilizando apenas a última observação de
-cada semana.
-
-#### Exemplo de resposta
-
-```json
-{
-  "series": "DTF 90 dias (semanal)",
-  "data": [
-    {
-      "date": "2026-02-08",
-      "value": 9.15
-    }
-  ]
-}
-```
-
----
-
-## Observações importantes
-
-- Os endpoints `/dtf-daily` e `/dtf-weekly` possuem fluxos separados.
-- Nenhuma regra de negócio altera a granularidade original dos dados.
-- A aplicação não realiza cálculos de vigência, apenas representação fiel.
-
----
-
-## Objetivo do projeto
-
-Fornecer uma interface simples, confiável e fiel aos dados oficiais do BanRep,
-permitindo o consumo da taxa DTF tanto em formato diário quanto semanal.
+## Deployment Overview
+Kubernetes manifests are provided for **dev**, **uat**, and **prod**. Each manifest defines the deployment, service, environment variables, health probes, and resource limits appropriate for its environment.
