@@ -13,7 +13,8 @@ public sealed class DtfDailyRabbitConsumer(
     IServiceScopeFactory scopeFactory,
     DtfDailyCaptureSettings settings,
     IConnectionFactory connectionFactory,
-    IFlowContextAccessor flowContext)
+    IFlowContextAccessor flowContext,
+    IFlowIdProvider flowIdProvider)
     : BackgroundService
 {
     private IConnection? _connection;
@@ -56,7 +57,7 @@ public sealed class DtfDailyRabbitConsumer(
         }
 
         var messageId = args.BasicProperties?.MessageId;
-        var flowId = TryGetFlowId(messageId) ?? Guid.NewGuid();
+        var flowId = flowIdProvider.CreateFromMessageId(messageId);
         flowContext.SetFlowId(flowId);
         var body = Encoding.UTF8.GetString(args.Body.ToArray());
 
@@ -106,13 +107,4 @@ public sealed class DtfDailyRabbitConsumer(
         base.Dispose();
     }
 
-    private static Guid? TryGetFlowId(string? messageId)
-    {
-        if (string.IsNullOrWhiteSpace(messageId))
-        {
-            return null;
-        }
-
-        return Guid.TryParse(messageId, out var parsed) ? parsed : null;
-    }
 }

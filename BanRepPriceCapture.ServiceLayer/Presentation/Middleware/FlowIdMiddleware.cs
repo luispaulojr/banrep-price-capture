@@ -4,23 +4,16 @@ namespace BanRepPriceCapture.ServiceLayer.Presentation.Middleware;
 
 public sealed class FlowIdMiddleware(RequestDelegate next)
 {
-    public async Task InvokeAsync(HttpContext context, IFlowContextAccessor flowContext)
+    public async Task InvokeAsync(
+        HttpContext context,
+        IFlowContextAccessor flowContext,
+        IFlowIdProvider flowIdProvider)
     {
         var header = context.Request.Headers[FlowConstants.FlowIdHeaderName].FirstOrDefault();
-        var flowId = TryParse(header) ?? Guid.NewGuid();
+        var flowId = flowIdProvider.CreateFromHeader(header);
 
         flowContext.SetFlowId(flowId);
 
         await next(context);
-    }
-
-    private static Guid? TryParse(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return null;
-        }
-
-        return Guid.TryParse(raw, out var parsed) ? parsed : null;
     }
 }
