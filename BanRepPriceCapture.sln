@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BanRepPriceCapture.DtfWeeklyPoc", "BanRepPriceCapture.DtfWeeklyPoc\BanRepPriceCapture.DtfWeeklyPoc.csproj", "{1DCD9964-C908-4ECA-9BAB-3BE666B351E3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BanRepPriceCapture.Dtf", "BanRepPriceCapture.Dtf\BanRepPriceCapture.Dtf.csproj", "{1DCD9964-C908-4ECA-9BAB-3BE666B351E3}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BanRepPriceCapture.Tests", "BanRepPriceCapture.Tests\BanRepPriceCapture.Tests.csproj", "{44E6849F-6E46-4EF0-BB65-247493926CBC}"
 EndProject

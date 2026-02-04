@@ -1,7 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
-using BanRepPriceCapture.DtfWeeklyPoc.Domain.Models;
-using BanRepPriceCapture.DtfWeeklyPoc.Infrastructure.Clients;
+using BanRepPriceCapture.Dtf.Infrastructure.Clients;
+using BanRepPriceCapture.Dtf.Domain.Models;
+using BanRepPriceCapture.Dtf.Infrastructure.Clients;
 using Xunit;
 
 namespace BanRepPriceCapture.Tests;

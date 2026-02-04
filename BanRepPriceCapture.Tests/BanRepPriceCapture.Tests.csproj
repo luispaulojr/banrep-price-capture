@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BanRepPriceCapture.DtfWeeklyPoc\BanRepPriceCapture.DtfWeeklyPoc.csproj" />
+    <ProjectReference Include="..\BanRepPriceCapture.Dtf\BanRepPriceCapture.Dtf.csproj" />
   </ItemGroup>
 
   <ItemGroup>
