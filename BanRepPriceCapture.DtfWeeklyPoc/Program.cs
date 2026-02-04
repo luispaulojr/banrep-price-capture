@@ -1,6 +1,8 @@
 using BanRepPriceCapture.DtfWeeklyPoc.Jobs;
 using BanRepPriceCapture.DtfWeeklyPoc.Models;
 using BanRepPriceCapture.DtfWeeklyPoc.Services;
+using Microsoft.Extensions.Options;
+using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +22,31 @@ builder.Services.AddHttpClient<BanRepSdmxClient>(http =>
 // Job
 builder.Services.AddScoped<DtfDailyJob>();
 builder.Services.AddScoped<DtWeeklyJob>();
+
+builder.Services.Configure<DtfDailyCaptureSettings>(builder.Configuration.GetSection("DtfDailyCapture"));
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<DtfDailyCaptureSettings>>().Value);
+
+builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<RabbitMqSettings>>().Value);
+builder.Services.AddSingleton<IConnectionFactory>(sp =>
+{
+    var settings = sp.GetRequiredService<RabbitMqSettings>();
+    return new ConnectionFactory
+    {
+        HostName = settings.HostName,
+        Port = settings.Port,
+        UserName = settings.UserName,
+        Password = settings.Password,
+        VirtualHost = settings.VirtualHost,
+        DispatchConsumersAsync = true,
+        AutomaticRecoveryEnabled = true
+    };
+});
+
+builder.Services.AddHttpClient<DtfDailyPayloadSender>();
+builder.Services.AddScoped<DtfDailyPriceRepository>();
+builder.Services.AddScoped<DtfDailyCaptureWorkflow>();
+builder.Services.AddHostedService<DtfDailyRabbitConsumer>();
 
 var app = builder.Build();
 
