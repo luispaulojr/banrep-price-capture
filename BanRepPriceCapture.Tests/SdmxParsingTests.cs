@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
-using BanRepPriceCapture.DtfWeeklyPoc.Models;
-using BanRepPriceCapture.DtfWeeklyPoc.Services;
+using BanRepPriceCapture.DtfWeeklyPoc.Domain.Models;
+using BanRepPriceCapture.DtfWeeklyPoc.Infrastructure.Clients;
 using Xunit;
 
 namespace BanRepPriceCapture.Tests;
@@ -83,7 +83,7 @@ public sealed class SdmxParsingTests
     }
 
     [Fact]
-    public async Task GetDtWeeklyAsync_ReturnsLastObservationPerIsoWeek()
+    public async Task GetDtfWeeklyAsync_ReturnsLastObservationPerIsoWeek()
     {
         using var stream = OpenFixture("SdmxWeeklySample.xml");
         using var reader = new StreamReader(stream);
@@ -102,7 +102,7 @@ public sealed class SdmxParsingTests
         using var http = new HttpClient(handler) { BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/") };
         var client = new BanRepSdmxClient(http);
 
-        var weekly = await client.GetDtWeeklyAsync(start: new DateOnly(2026, 2, 3));
+        var weekly = await client.GetDtfWeeklyAsync(start: new DateOnly(2026, 2, 3));
 
         Assert.Equal(2, weekly.Count);
         Assert.Equal(new DateOnly(2025, 1, 2), weekly[0].Date);
