@@ -1,29 +1,67 @@
-﻿# BanRep DTF Price Capture
+# BanRep Price Capture
 
 ## Visão geral
 
-Esta aplicação tem como objetivo capturar, processar e expor os dados da taxa DTF
-publicados pelo Banco de la República da Colômbia, utilizando a integração via SDMX.
-
-A aplicação consome o endpoint SDMX oficial do BanRep, interpreta o XML retornado
-e disponibiliza os dados por meio de endpoints HTTP em dois formatos distintos:
+O **BanRep Price Capture** captura, processa e expõe a taxa DTF publicada pelo
+Banco de la República da Colômbia por meio do SDMX. A aplicação consome o endpoint
+oficial, interpreta o XML retornado e disponibiliza os dados em dois formatos:
 
 - Série diária da DTF
-- Série semanal da DTF, considerando apenas a última observação de cada semana
+- Série semanal da DTF (última observação de cada semana)
 
-Toda a lógica de negócio foi construída para preservar fielmente a granularidade
-e os valores divulgados pelo BanRep, sem cálculos adicionais de vigência ou ajustes manuais.
+Além da API HTTP, o serviço possui um fluxo de captura diária acionado por fila
+RabbitMQ que persiste os dados em banco e envia o payload para um endpoint externo.
+
+---
+
+## Arquitetura (visão geral)
+
+O projeto segue uma arquitetura em camadas, com responsabilidades bem separadas:
+
+- **Service Layer**: API HTTP, health checks, middleware e composição de dependências.
+- **Application Layer**: workflows e jobs que orquestram as operações de negócio.
+- **Domain Layer**: modelos de domínio compartilhados.
+- **Infrastructure Layer**: integrações externas (SDMX, RabbitMQ, PostgreSQL,
+  outbound HTTP, AWS Secrets Manager e logging).
+
+Integrações principais:
+
+- **SDMX (BanRep)**: fonte oficial dos dados da DTF.
+- **PostgreSQL**: persistência dos registros diários.
+- **RabbitMQ**: dispara a captura diária por mensagem.
+- **Outbound HTTP**: entrega do payload diário a um endpoint configurado.
+- **AWS**: Secrets Manager para credenciais de banco e CloudWatch Logs para logging.
+
+---
+
+## Fluxos de execução
+
+### 1) API HTTP (/dtf-daily e /dtf-weekly)
+
+1. Requisição chega ao endpoint HTTP.
+2. O workflow `DtfSeriesWorkflow` executa o job correspondente:
+   - `DtfDailyJob` para série diária
+   - `DtfWeeklyJob` para série semanal
+3. O job consulta o SDMX via `BanRepSdmxClient`.
+4. A resposta é transformada em JSON e devolvida ao cliente.
+
+### 2) Captura diária via RabbitMQ
+
+1. Uma mensagem é publicada na fila configurada (`DtfDailyCapture.QueueName`).
+2. O consumidor `DtfDailyRabbitConsumer` inicia o fluxo de captura.
+3. O workflow `DtfDailyCaptureWorkflow`:
+   - Consulta o SDMX para obter a série diária.
+   - Persiste cada registro no PostgreSQL.
+   - Envia o payload para o endpoint externo configurado.
+4. Em falha crítica, uma notificação é disparada e a mensagem é reencaminhada.
 
 ---
 
 ## Fonte dos dados
 
-Os dados são obtidos a partir do serviço SDMX do Banco de la República.
-O XML retornado já contém observações diárias, onde cada `<generic:Obs>`
-representa um dia específico com seu respectivo valor da taxa DTF.
-
-A aplicação apenas transforma esses dados para JSON, respeitando a granularidade
-original da fonte.
+Os dados são obtidos via SDMX do Banco de la República. Cada `<generic:Obs>`
+representa uma observação diária, que é convertida para JSON sem alterar a
+granularidade original.
 
 ---
 
@@ -31,19 +69,8 @@ original da fonte.
 
 ### GET /dtf-daily
 
-#### Descrição
-
-Retorna a série diária da taxa DTF.
-Cada dia presente no XML SDMX é representado individualmente no JSON de saída.
-
-Não há agregação, colapso ou cálculo de períodos.
-A saída reflete exatamente as observações diárias divulgadas pelo BanRep.
-
-#### Comportamento
-
-- Um registro por dia
-- Datas consecutivas sem lacunas, conforme o SDMX
-- Valor diário da DTF
+Retorna a série diária da taxa DTF. Cada dia presente no SDMX é representado
+individualmente no JSON, sem agregações adicionais.
 
 #### Exemplo de resposta
 
@@ -61,26 +88,14 @@ A saída reflete exatamente as observações diárias divulgadas pelo BanRep.
     }
   ]
 }
-````
+```
 
 ---
 
 ### GET /dtf-weekly
 
-#### Descrição
-
-Retorna a série semanal da taxa DTF.
-Para cada semana, é retornado apenas o valor correspondente à última observação
-disponível daquela semana.
-
-Este endpoint existe para manter compatibilidade com consumidores que esperam
-uma série semanal resumida.
-
-#### Comportamento
-
-* Um registro por semana
-* Sempre utiliza a última observação semanal
-* Não altera a lógica de cálculo já existente
+Retorna a série semanal da taxa DTF, utilizando apenas a última observação de
+cada semana.
 
 #### Exemplo de resposta
 
@@ -100,15 +115,13 @@ uma série semanal resumida.
 
 ## Observações importantes
 
-* O endpoint `/dtf-daily` e o endpoint `/dtf-weekly` possuem fluxos de execução separados.
-* Cada endpoint chama explicitamente seu método correspondente.
-* Nenhuma regra de negócio existente foi alterada durante a separação dos fluxos.
-* A aplicação não realiza cálculos de vigência, apenas representação dos dados.
+- Os endpoints `/dtf-daily` e `/dtf-weekly` possuem fluxos separados.
+- Nenhuma regra de negócio altera a granularidade original dos dados.
+- A aplicação não realiza cálculos de vigência, apenas representação fiel.
 
 ---
 
 ## Objetivo do projeto
 
 Fornecer uma interface simples, confiável e fiel aos dados oficiais do BanRep,
-permitindo o consumo da taxa DTF tanto em formato diário quanto semanal,
-de acordo com a necessidade de cada consumidor.
+permitindo o consumo da taxa DTF tanto em formato diário quanto semanal.
