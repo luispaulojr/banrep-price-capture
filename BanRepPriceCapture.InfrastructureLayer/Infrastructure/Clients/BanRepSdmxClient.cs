@@ -4,10 +4,13 @@ using System.Xml.Linq;
 using BanRepPriceCapture.ApplicationLayer.Exceptions;
 using BanRepPriceCapture.ApplicationLayer.Interfaces;
 using BanRepPriceCapture.ApplicationLayer.Models;
+using BanRepPriceCapture.InfrastructureLayer.Resilience;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Clients;
 
-public sealed class BanRepSdmxClient(HttpClient http) : ISdmxClient
+public sealed class BanRepSdmxClient(
+    HttpClient http,
+    IRetryPolicyProvider retryPolicies) : ISdmxClient
 {
     // Base REST endpoint do PDF.
     // https://totoro.banrep.gov.co/nsi-jax-ws/rest/data
@@ -27,55 +30,66 @@ public sealed class BanRepSdmxClient(HttpClient http) : ISdmxClient
         // /rest/data/{AGENCY_ID},{FLOW_ID},{VERSION}/all/ALL/?startPeriod=...&endPeriod=...&dimensionAtObservation=TIME_PERIOD&detail=full
         var url = BuildDtfUrl(start, end);
 
-        using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Accept.ParseAdd("application/xml");
-
-        HttpResponseMessage resp;
-        try
+        return await retryPolicies.ExecuteAsync(async token =>
         {
-            resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-        }
-        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
-        {
-            throw new TimeoutException("Timeout ao chamar o SDMX do BanRep.", ex);
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new HttpRequestException("Falha de rede ao chamar o SDMX do BanRep.", ex);
-        }
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Accept.ParseAdd("application/xml");
 
-        var mediaType = resp.Content.Headers.ContentType?.MediaType;
+            HttpResponseMessage resp;
+            try
+            {
+                resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, token);
+            }
+            catch (TaskCanceledException ex) when (!token.IsCancellationRequested)
+            {
+                throw new TimeoutException("Timeout ao chamar o SDMX do BanRep.", ex);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new HttpRequestException("Falha de rede ao chamar o SDMX do BanRep.", ex);
+            }
 
-        if (mediaType is null || !mediaType.Contains("xml", StringComparison.OrdinalIgnoreCase))
-        {
-            var body = await SafeReadBody(resp, ct);
-            throw new BanRepSdmxException(
-                $"Resposta inesperada do BanRep. Content-Type={mediaType ?? "<null>"}. Body={(body ?? "<vazio>")}");
-        }
-        
-        // O PDF descreve erros HTTP comuns: 400, 404, 500, 503
-        if (resp.StatusCode == HttpStatusCode.NotFound)
-        {
-            return [];
-        }
+            await using var response = resp;
+            var mediaType = response.Content.Headers.ContentType?.MediaType;
 
-        if (!resp.IsSuccessStatusCode)
-        {
-            var body = await SafeReadBody(resp, ct);
-            throw new BanRepSdmxException(
-                $"Erro do BanRep SDMX. Status={(int)resp.StatusCode} {resp.ReasonPhrase}. Body={(body ?? "<vazio>")}");
-        }
+            if (mediaType is null || !mediaType.Contains("xml", StringComparison.OrdinalIgnoreCase))
+            {
+                var body = await SafeReadBody(response, token);
+                throw new BanRepSdmxException(
+                    $"Resposta inesperada do BanRep. Content-Type={mediaType ?? "<null>"}. Body={(body ?? "<vazio>")}");
+            }
 
-        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+            // O PDF descreve erros HTTP comuns: 400, 404, 500, 503
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return new List<BanRepSeriesData>();
+            }
 
-        // O serviço retorna SDMX-ML (XML). A observação vem como:
-        // <generic:Obs>
-        //   <generic:ObsDimension value="2024-08-16" />
-        //   <generic:ObsValue value="10.751" />
-        // </generic:Obs>
-        //
-        // A documentação explica que TIME_PERIOD é a dimensão do tempo e OBS_VALUE é o valor.
-        return ParseSdmxGenericData(stream);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await SafeReadBody(response, token);
+                var message =
+                    $"Erro do BanRep SDMX. Status={(int)response.StatusCode} {response.ReasonPhrase}. Body={(body ?? "<vazio>")}";
+
+                if (IsTransientStatusCode(response.StatusCode))
+                {
+                    throw new TransientFailureException(message);
+                }
+
+                throw new BanRepSdmxException(message);
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(token);
+
+            // O serviço retorna SDMX-ML (XML). A observação vem como:
+            // <generic:Obs>
+            //   <generic:ObsDimension value="2024-08-16" />
+            //   <generic:ObsValue value="10.751" />
+            // </generic:Obs>
+            //
+            // A documentação explica que TIME_PERIOD é a dimensão do tempo e OBS_VALUE é o valor.
+            return ParseSdmxGenericData(stream);
+        }, RetryPolicyKind.SdmxHttp, "BanRepSdmxClient.GetDtfDailyAsync", ct);
     }
 
     public async Task<List<BanRepSeriesData>> GetDtfWeeklyAsync(
@@ -206,5 +220,15 @@ public sealed class BanRepSdmxClient(HttpClient http) : ISdmxClient
         {
             return null;
         }
+    }
+
+    private static bool IsTransientStatusCode(HttpStatusCode statusCode)
+    {
+        return statusCode == HttpStatusCode.RequestTimeout
+            || statusCode == HttpStatusCode.TooManyRequests
+            || statusCode == HttpStatusCode.InternalServerError
+            || statusCode == HttpStatusCode.BadGateway
+            || statusCode == HttpStatusCode.ServiceUnavailable
+            || statusCode == HttpStatusCode.GatewayTimeout;
     }
 }

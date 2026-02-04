@@ -4,13 +4,15 @@ using BanRepPriceCapture.ApplicationLayer.Interfaces;
 using BanRepPriceCapture.DomainLayer.Models;
 using BanRepPriceCapture.InfrastructureLayer.Database;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
+using BanRepPriceCapture.InfrastructureLayer.Resilience;
 using Dapper;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Repositories;
 
 public sealed class DtfDailyPriceRepository(
     DtfDailyCaptureSettings settings,
-    IDatabaseConnectionFactory connectionFactory) : IDtfDailyPriceRepository
+    IDatabaseConnectionFactory connectionFactory,
+    IRetryPolicyProvider retryPolicies) : IDtfDailyPriceRepository
 {
     private static readonly Regex TableNameRegex = new("^[a-zA-Z_][a-zA-Z0-9_]*$", RegexOptions.Compiled);
 
@@ -25,7 +27,11 @@ public sealed class DtfDailyPriceRepository(
         CancellationToken ct)
     {
         await using var connection = await _connectionFactory.CreateReadWriteAsync(ct);
-        await connection.OpenAsync(ct);
+        await retryPolicies.ExecuteAsync(
+            token => connection.OpenAsync(token),
+            RetryPolicyKind.DatabaseConnection,
+            "DtfDailyPriceRepository.InsertAsync",
+            ct);
 
         var payloadJson = JsonSerializer.Serialize(payload);
         var parameters = new

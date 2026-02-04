@@ -11,6 +11,7 @@ using BanRepPriceCapture.InfrastructureLayer.Notifications;
 using BanRepPriceCapture.InfrastructureLayer.Outbound;
 using BanRepPriceCapture.InfrastructureLayer.Repositories;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
+using BanRepPriceCapture.InfrastructureLayer.Resilience;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using Dapper;
 using Microsoft.Extensions.Configuration;
@@ -45,6 +46,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IAmazonSecretsManager, AmazonSecretsManagerClient>();
         services.AddSingleton<IDatabaseSecretsProvider, AwsSecretsManagerDatabaseSecretsProvider>();
         services.AddSingleton<IDatabaseConnectionFactory, NpgsqlConnectionFactory>();
+        services.AddSingleton<IRetryPolicyProvider, RetryPolicyProvider>();
 
         SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
         SqlMapper.AddTypeHandler(new TimeOnlyTypeHandler());

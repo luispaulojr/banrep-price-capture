@@ -3,6 +3,7 @@ using BanRepPriceCapture.ApplicationLayer.Workflows;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
+using BanRepPriceCapture.InfrastructureLayer.Resilience;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
@@ -14,14 +15,15 @@ public sealed class DtfDailyRabbitConsumer(
     DtfDailyCaptureSettings settings,
     IConnectionFactory connectionFactory,
     IFlowContextAccessor flowContext,
-    IFlowIdProvider flowIdProvider)
+    IFlowIdProvider flowIdProvider,
+    IRetryPolicyProvider retryPolicies)
     : BackgroundService
 {
     private IConnection? _connection;
     private IModel? _channel;
     private CancellationToken _stoppingToken;
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _stoppingToken = stoppingToken;
         if (string.IsNullOrWhiteSpace(settings.QueueName))
@@ -29,8 +31,17 @@ public sealed class DtfDailyRabbitConsumer(
             throw new InvalidOperationException("QueueName nao configurado.");
         }
 
-        _connection = connectionFactory.CreateConnection();
-        _channel = _connection.CreateModel();
+        _connection = await retryPolicies.ExecuteAsync(
+            _ => Task.FromResult(connectionFactory.CreateConnection()),
+            RetryPolicyKind.RabbitMqConnection,
+            "DtfDailyRabbitConsumer.ExecuteAsync",
+            stoppingToken);
+
+        _channel = await retryPolicies.ExecuteAsync(
+            _ => Task.FromResult(_connection.CreateModel()),
+            RetryPolicyKind.RabbitMqConnection,
+            "DtfDailyRabbitConsumer.ExecuteAsync",
+            stoppingToken);
         _channel.BasicQos(0, 1, false);
 
         var consumer = new AsyncEventingBasicConsumer(_channel);
@@ -46,7 +57,7 @@ public sealed class DtfDailyRabbitConsumer(
             description: "Consumidor RabbitMQ iniciado.",
             message: $"fila={settings.QueueName}");
 
-        return Task.CompletedTask;
+        return;
     }
 
     private async Task HandleMessageAsync(object sender, BasicDeliverEventArgs args)
