@@ -85,8 +85,11 @@ public sealed class BanRepSdmxClient(HttpClient http)
 
         return AggregateWeeklyByIsoWeek(daily);
     }
-
-    private static string BuildDtfUrl(DateOnly? start, DateOnly? end)
+    
+    public async Task<List<BanRepSeriesData>> GetDtWeeklyAsync(
+        DateOnly? start = null,
+        DateOnly? end = null,
+        CancellationToken ct = default)
     {
         // Regras obrigatorias:
         // - startPeriod/endPeriod devem conter apenas o ano (YYYY).
@@ -105,7 +108,26 @@ public sealed class BanRepSdmxClient(HttpClient http)
 
         var qs = string.Join("&", query);
 
-        return $"{AgencyId},{DtfDailyHistFlowId},{Version}/all/ALL/?{qs}";
+        // O serviço retorna SDMX-ML (XML). A observação vem como:
+        // <generic:Obs>
+        //   <generic:ObsDimension value="2024-08-16" />
+        //   <generic:ObsValue value="10.751" />
+        // </generic:Obs>
+        //
+        // A documentação explica que TIME_PERIOD é a dimensão do tempo e OBS_VALUE é o valor.
+        var daily = ParseSdmxGenericData(stream);
+
+        // Mantemos a granularidade diaria do SDMX sem agregacao.
+        return daily;
+    }
+
+    internal static List<BanRepSeriesData> AggregateWeeklyByIsoWeek(IEnumerable<BanRepSeriesData> daily)
+    {
+        return daily
+            .GroupBy(d => IsoWeekKey(d.Date))
+            .Select(g => g.OrderBy(x => x.Date).Last())
+            .OrderBy(x => x.Date)
+            .ToList();
     }
 
     internal static List<BanRepSeriesData> ParseSdmxGenericData(Stream xmlStream)
@@ -142,6 +164,36 @@ public sealed class BanRepSdmxClient(HttpClient http)
             .ToList();
 
         return obs;
+    }
+    
+    private static string BuildDtfUrl(DateOnly? start, DateOnly? end)
+    {
+        // Regras obrigatorias:
+        // - startPeriod/endPeriod devem conter apenas o ano (YYYY).
+        // - A data de referencia e a data de entrada do dia corrente.
+        // - startPeriod = ano - 1, endPeriod = ano + 1.
+        var referenceDate = end ?? start ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var year = referenceDate.Year;
+
+        var query = new List<string>
+        {
+            $"startPeriod={year - 1:0000}",
+            $"endPeriod={year + 1:0000}",
+            "dimensionAtObservation=TIME_PERIOD",
+            "detail=full"
+        };
+
+        var qs = string.Join("&", query);
+
+        return $"{AgencyId},{DtfDailyHistFlowId},{Version}/all/ALL/?{qs}";
+    }
+    
+    private static string IsoWeekKey(DateOnly date)
+    {
+        var dt = date.ToDateTime(TimeOnly.MinValue);
+        var week = ISOWeek.GetWeekOfYear(dt);
+        var year = ISOWeek.GetYear(dt);
+        return $"{year:D4}-W{week:D2}";
     }
 
     internal static List<BanRepSeriesData> AggregateWeeklyByIsoWeek(IEnumerable<BanRepSeriesData> daily)
@@ -184,14 +236,6 @@ public sealed class BanRepSdmxClient(HttpClient http)
             NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
             CultureInfo.InvariantCulture,
             out value);
-    }
-
-    private static string IsoWeekKey(DateOnly date)
-    {
-        var dt = date.ToDateTime(TimeOnly.MinValue);
-        var week = ISOWeek.GetWeekOfYear(dt);
-        var year = ISOWeek.GetYear(dt);
-        return $"{year:D4}-W{week:D2}";
     }
 
     private static async Task<string?> SafeReadBody(HttpResponseMessage resp, CancellationToken ct)
