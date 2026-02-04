@@ -15,12 +15,12 @@ public sealed class DtfDailyJob(
         logger.LogInformation(
             method: "DtfDailyJob.ExecuteAsync",
             description: "Executando DtfDailyJob.",
-            message: $"start={start} end={end} flow_id={flowContext.FlowId}");
+            message: $"start={start} end={end}");
         var data = await client.GetDtfDailyAsync(start, end, ct);
         logger.LogInformation(
             method: "DtfDailyJob.ExecuteAsync",
             description: "DtfDailyJob finalizado.",
-            message: $"count={data.Count} flow_id={flowContext.FlowId}");
+            message: $"count={data.Count}");
         return data;
     }
 }

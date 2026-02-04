@@ -20,8 +20,7 @@ public sealed class DtfDailyCaptureWorkflow(
         var flowId = flowContext.FlowId;
         logger.LogInformation(
             method: "DtfDailyCaptureWorkflow.ProcessAsync",
-            description: "Iniciando captura diaria DTF.",
-            message: $"flow_id={flowId}");
+            description: "Iniciando captura diaria DTF.");
 
         var dailyData = await client.GetDtfDailyAsync(ct: ct);
         var payload = dailyData
@@ -47,14 +46,13 @@ public sealed class DtfDailyCaptureWorkflow(
         logger.LogInformation(
             method: "DtfDailyCaptureWorkflow.ProcessAsync",
             description: "Persistencia concluida.",
-            message: $"flow_id={flowId} registros={payload.Count}");
+            message: $"registros={payload.Count}");
 
         await sender.SendAsync(payload, ct);
 
         logger.LogInformation(
             method: "DtfDailyCaptureWorkflow.ProcessAsync",
-            description: "Envio HTTP concluido.",
-            message: $"flow_id={flowId}");
+            description: "Envio HTTP concluido.");
     }
 
     public void NotifyCritical(Exception exception)
@@ -63,7 +61,6 @@ public sealed class DtfDailyCaptureWorkflow(
         logger.LogCritical(
             method: "DtfDailyCaptureWorkflow.NotifyCritical",
             description: "Falha critica no fluxo diario.",
-            message: $"flow_id={flowId}",
             exception: exception);
 
         notificationService.NotifyError(new NotificationPayload

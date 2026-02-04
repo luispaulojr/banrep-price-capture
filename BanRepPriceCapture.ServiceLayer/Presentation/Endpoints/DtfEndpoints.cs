@@ -92,7 +92,6 @@ public static class DtfEndpoints
         logger.LogError(
             method: "DtfEndpoints.HandleException",
             description: "Erro ao processar requisicao DTF.",
-            message: $"flow_id={flowContext.FlowId}",
             exception: ex);
 
         if (ex is not TimeoutException && ex is not BanRepSdmxException && ex is not HttpRequestException)
