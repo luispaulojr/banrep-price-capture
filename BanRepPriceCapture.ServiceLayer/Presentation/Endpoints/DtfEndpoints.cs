@@ -1,6 +1,8 @@
 using BanRepPriceCapture.ApplicationLayer.Application.Models;
 using BanRepPriceCapture.ApplicationLayer.Application.Workflows;
 using BanRepPriceCapture.ApplicationLayer.Exceptions;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 
 namespace BanRepPriceCapture.ServiceLayer.Presentation.Endpoints;
 

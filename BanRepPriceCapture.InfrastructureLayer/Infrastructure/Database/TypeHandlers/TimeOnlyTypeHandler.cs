@@ -1,4 +1,7 @@
 using System.Data;
+using Dapper;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database.TypeHandlers;
 

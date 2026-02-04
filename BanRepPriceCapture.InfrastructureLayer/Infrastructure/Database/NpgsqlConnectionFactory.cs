@@ -1,5 +1,5 @@
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
-using BanRepPriceCapture.InfrastructureLayer.Database;
+using Npgsql;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database;
 

@@ -4,6 +4,7 @@ using BanRepPriceCapture.ApplicationLayer.Logging;
 using BanRepPriceCapture.ApplicationLayer.Application.Workflows;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;

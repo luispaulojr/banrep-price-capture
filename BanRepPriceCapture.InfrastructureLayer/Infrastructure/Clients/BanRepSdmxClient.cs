@@ -49,7 +49,7 @@ public sealed class BanRepSdmxClient(
                 throw new HttpRequestException("Falha de rede ao chamar o SDMX do BanRep.", ex);
             }
 
-            await using var response = resp;
+            using var response = resp;
             var mediaType = response.Content.Headers.ContentType?.MediaType;
 
             if (mediaType is null || !mediaType.Contains("xml", StringComparison.OrdinalIgnoreCase))
@@ -102,7 +102,7 @@ public sealed class BanRepSdmxClient(
         return AggregateWeeklyByIsoWeek(daily);
     }
 
-    internal static List<BanRepSeriesData> AggregateWeeklyByIsoWeek(IEnumerable<BanRepSeriesData> daily)
+    public static List<BanRepSeriesData> AggregateWeeklyByIsoWeek(IEnumerable<BanRepSeriesData> daily)
     {
         return daily
             .GroupBy(d => IsoWeekKey(d.Date))
@@ -111,7 +111,7 @@ public sealed class BanRepSdmxClient(
             .ToList();
     }
 
-    internal static List<BanRepSeriesData> ParseSdmxGenericData(Stream xmlStream)
+    public static List<BanRepSeriesData> ParseSdmxGenericData(Stream xmlStream)
     {
         var doc = XDocument.Load(xmlStream);
 

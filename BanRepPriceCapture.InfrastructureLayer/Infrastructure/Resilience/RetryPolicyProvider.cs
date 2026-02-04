@@ -1,6 +1,8 @@
 using System.Net.Sockets;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
+using Npgsql;
+using RabbitMQ.Client.Exceptions;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 
@@ -90,41 +92,26 @@ public sealed class RetryPolicyProvider(
 
     private static bool IsTransientHttp(Exception ex)
     {
-        return ex is TransientFailureException
-            || ex is HttpRequestException
-            || ex is TimeoutException;
+        return ex is TransientFailureException or HttpRequestException or TimeoutException;
     }
 
     private static bool IsTransientDatabase(Exception ex)
     {
-        return ex is TransientFailureException
-            || ex is NpgsqlException
-            || ex is TimeoutException
-            || ex is SocketException;
+        return ex is TransientFailureException or NpgsqlException or TimeoutException or SocketException;
     }
 
     private static bool IsTransientRabbit(Exception ex)
     {
-        return ex is TransientFailureException
-            || ex is BrokerUnreachableException
-            || ex is SocketException;
+        return ex is TransientFailureException or BrokerUnreachableException or SocketException;
     }
 
     private sealed record RetryPolicy(int MaxAttempts, IReadOnlyList<TimeSpan> Delays)
     {
         public static RetryPolicy Create(int maxAttempts, params TimeSpan[] delays)
         {
-            if (maxAttempts < 1)
-            {
-                throw new ArgumentOutOfRangeException(nameof(maxAttempts));
-            }
+            ArgumentOutOfRangeException.ThrowIfLessThan(maxAttempts, 1);
 
-            if (delays.Length != Math.Max(0, maxAttempts - 1))
-            {
-                throw new ArgumentException("Delays must match maxAttempts - 1.", nameof(delays));
-            }
-
-            return new RetryPolicy(maxAttempts, delays);
+            return delays.Length != Math.Max(0, maxAttempts - 1) ? throw new ArgumentException("Delays must match maxAttempts - 1.", nameof(delays)) : new RetryPolicy(maxAttempts, delays);
         }
     }
 }

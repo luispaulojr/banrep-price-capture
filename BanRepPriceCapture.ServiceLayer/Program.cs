@@ -2,6 +2,10 @@ using AWS.Logger.AspNetCore;
 using BanRepPriceCapture.ServiceLayer.DependencyInjection;
 using BanRepPriceCapture.ServiceLayer.Presentation.Endpoints;
 using BanRepPriceCapture.ServiceLayer.Presentation.Middleware;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
