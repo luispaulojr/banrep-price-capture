@@ -3,11 +3,11 @@ using System.Text;
 using System.Text.Json;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
-using BanRepPriceCapture.ApplicationLayer.Notifications;
+using BanRepPriceCapture.ApplicationLayer.Application.Notifications;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
-using BanRepPriceCapture.InfrastructureLayer.Resilience;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Notifications;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Notifications;
 
 public sealed class HttpNotificationService(
     HttpClient httpClient,

@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Database;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database;
 
 internal static class SqlQueries
 {

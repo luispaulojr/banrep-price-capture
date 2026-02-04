@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace BanRepPriceCapture.ApplicationLayer.Notifications;
+namespace BanRepPriceCapture.ApplicationLayer.Application.Notifications;
 
 public interface INotificationService
 {

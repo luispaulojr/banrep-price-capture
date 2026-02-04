@@ -1,4 +1,4 @@
-namespace BanRepPriceCapture.DomainLayer.Models;
+namespace BanRepPriceCapture.DomainLayer.Domain.Models;
 
 public sealed record DtfDailyPricePayload(
     int CodAtivo,

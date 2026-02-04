@@ -1,11 +1,11 @@
 using BanRepPriceCapture.ApplicationLayer.Exceptions;
 using BanRepPriceCapture.ApplicationLayer.Flow;
-using BanRepPriceCapture.ApplicationLayer.Jobs;
+using BanRepPriceCapture.ApplicationLayer.Application.Jobs;
 using BanRepPriceCapture.ApplicationLayer.Logging;
-using BanRepPriceCapture.ApplicationLayer.Models;
-using BanRepPriceCapture.ApplicationLayer.Notifications;
+using BanRepPriceCapture.ApplicationLayer.Application.Models;
+using BanRepPriceCapture.ApplicationLayer.Application.Notifications;
 
-namespace BanRepPriceCapture.ApplicationLayer.Workflows;
+namespace BanRepPriceCapture.ApplicationLayer.Application.Workflows;
 
 public sealed class DtfSeriesWorkflow(
     DtfDailyJob dailyJob,

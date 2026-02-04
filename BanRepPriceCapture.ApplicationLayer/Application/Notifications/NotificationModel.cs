@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace BanRepPriceCapture.ApplicationLayer.Notifications;
+namespace BanRepPriceCapture.ApplicationLayer.Application.Notifications;
 
 public class NotificationModel
 {
