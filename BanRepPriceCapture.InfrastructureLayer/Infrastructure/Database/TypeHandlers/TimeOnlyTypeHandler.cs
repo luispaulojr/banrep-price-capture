@@ -1,9 +1,6 @@
 using System.Data;
-using Dapper;
-using Npgsql;
-using NpgsqlTypes;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Database.TypeHandlers;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database.TypeHandlers;
 
 public sealed class TimeOnlyTypeHandler : SqlMapper.TypeHandler<TimeOnly>
 {

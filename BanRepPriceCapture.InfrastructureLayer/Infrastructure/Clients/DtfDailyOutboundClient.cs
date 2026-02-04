@@ -4,7 +4,7 @@ using BanRepPriceCapture.DomainLayer.Models;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using BanRepPriceCapture.InfrastructureLayer.Resilience;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Clients;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
 
 public sealed class DtfDailyOutboundClient(
     HttpClient http,

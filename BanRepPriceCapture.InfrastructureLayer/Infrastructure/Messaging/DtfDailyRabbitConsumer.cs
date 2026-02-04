@@ -1,13 +1,11 @@
 using System.Text;
-using BanRepPriceCapture.ApplicationLayer.Workflows;
-using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
+using BanRepPriceCapture.ApplicationLayer.Workflows;
+using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using BanRepPriceCapture.InfrastructureLayer.Resilience;
-using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Messaging;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Messaging;
 
 public sealed class DtfDailyRabbitConsumer(
     IStructuredLogger logger,

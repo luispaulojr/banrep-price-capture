@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace BanRepPriceCapture.DomainLayer.DependencyInjection;
+namespace BanRepPriceCapture.DomainLayer.Domain.DependencyInjection;
 
 public static class DomainServiceCollectionExtensions
 {

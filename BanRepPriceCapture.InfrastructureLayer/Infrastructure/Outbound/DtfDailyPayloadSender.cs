@@ -1,7 +1,7 @@
 using BanRepPriceCapture.ApplicationLayer.Interfaces;
 using BanRepPriceCapture.DomainLayer.Models;
 using BanRepPriceCapture.ApplicationLayer.Logging;
-using BanRepPriceCapture.InfrastructureLayer.Clients;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Outbound;
 

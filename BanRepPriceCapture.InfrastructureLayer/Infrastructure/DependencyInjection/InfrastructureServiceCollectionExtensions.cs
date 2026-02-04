@@ -1,12 +1,12 @@
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
 using Amazon.SecretsManager;
 using BanRepPriceCapture.ApplicationLayer.Interfaces;
 using BanRepPriceCapture.ApplicationLayer.Notifications;
-using BanRepPriceCapture.InfrastructureLayer.Aws;
-using BanRepPriceCapture.InfrastructureLayer.Clients;
 using BanRepPriceCapture.InfrastructureLayer.Database;
-using BanRepPriceCapture.InfrastructureLayer.Database.TypeHandlers;
 using BanRepPriceCapture.InfrastructureLayer.Http;
-using BanRepPriceCapture.InfrastructureLayer.Messaging;
 using BanRepPriceCapture.InfrastructureLayer.Notifications;
 using BanRepPriceCapture.InfrastructureLayer.Outbound;
 using BanRepPriceCapture.InfrastructureLayer.Repositories;
@@ -14,6 +14,10 @@ using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using BanRepPriceCapture.InfrastructureLayer.Resilience;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Aws;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database.TypeHandlers;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Messaging;
 using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

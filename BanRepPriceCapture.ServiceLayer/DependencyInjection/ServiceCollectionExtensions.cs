@@ -1,5 +1,3 @@
-using BanRepPriceCapture.ApplicationLayer.DependencyInjection;
-using BanRepPriceCapture.DomainLayer.DependencyInjection;
 using BanRepPriceCapture.InfrastructureLayer.DependencyInjection;
 using BanRepPriceCapture.InfrastructureLayer.Logging;
 using BanRepPriceCapture.ServiceLayer.Presentation.HealthChecks;

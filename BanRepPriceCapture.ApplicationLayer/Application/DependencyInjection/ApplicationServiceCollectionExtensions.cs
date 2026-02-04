@@ -2,7 +2,7 @@ using BanRepPriceCapture.ApplicationLayer.Jobs;
 using BanRepPriceCapture.ApplicationLayer.Workflows;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace BanRepPriceCapture.ApplicationLayer.DependencyInjection;
+namespace BanRepPriceCapture.ApplicationLayer.Application.DependencyInjection;
 
 public static class ApplicationServiceCollectionExtensions
 {

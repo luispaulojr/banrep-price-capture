@@ -1,6 +1,6 @@
 using BanRepPriceCapture.DomainLayer.Models;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Clients;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
 
 public interface IDtfDailyOutboundClient
 {

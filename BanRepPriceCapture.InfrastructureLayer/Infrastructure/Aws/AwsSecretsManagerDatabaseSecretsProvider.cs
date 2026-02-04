@@ -1,12 +1,10 @@
 using System.Text.Json;
-using Amazon.SecretsManager;
-using Amazon.SecretsManager.Model;
-using BanRepPriceCapture.InfrastructureLayer.Database;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
+using BanRepPriceCapture.InfrastructureLayer.Database;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Aws;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Aws;
 
-public sealed class AwsSecretsManagerDatabaseSecretsProvider(
+public abstract sealed class AwsSecretsManagerDatabaseSecretsProvider(
     IAmazonSecretsManager secretsManager,
     DatabaseSecretSettings settings) : IDatabaseSecretsProvider
 {

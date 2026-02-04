@@ -6,7 +6,7 @@ using BanRepPriceCapture.ApplicationLayer.Interfaces;
 using BanRepPriceCapture.ApplicationLayer.Models;
 using BanRepPriceCapture.InfrastructureLayer.Resilience;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Clients;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
 
 public sealed class BanRepSdmxClient(
     HttpClient http,
