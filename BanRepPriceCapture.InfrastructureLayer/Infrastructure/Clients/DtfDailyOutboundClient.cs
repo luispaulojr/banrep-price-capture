@@ -8,10 +8,10 @@ namespace BanRepPriceCapture.InfrastructureLayer.Clients;
 
 public sealed class DtfDailyOutboundClient(
     HttpClient http,
-    DtfDailyCaptureSettings settings,
+    DtfDailyOutboundServiceSettings settings,
     IRetryPolicyProvider retryPolicies) : IDtfDailyOutboundClient
 {
-    private readonly Uri _outboundUri = new(settings.OutboundUrl, UriKind.Absolute);
+    private readonly Uri _outboundUri = new(settings.BaseUrl, UriKind.Absolute);
 
     public async Task SendAsync(IReadOnlyCollection<DtfDailyPricePayload> payload, CancellationToken ct)
     {
