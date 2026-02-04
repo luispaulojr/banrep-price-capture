@@ -1,52 +1,31 @@
-using BanRepPriceCapture.DtfWeeklyPoc.Jobs;
-using BanRepPriceCapture.DtfWeeklyPoc.Models;
-using BanRepPriceCapture.DtfWeeklyPoc.Services;
-using Microsoft.Extensions.Options;
-using RabbitMQ.Client;
+using Amazon.Extensions.NETCore.Setup;
+using Amazon.Logger.AspNetCore;
+using BanRepPriceCapture.DtfWeeklyPoc.Application.DependencyInjection;
+using BanRepPriceCapture.DtfWeeklyPoc.Infrastructure.DependencyInjection;
+using BanRepPriceCapture.DtfWeeklyPoc.Presentation.Endpoints;
+using BanRepPriceCapture.DtfWeeklyPoc.Presentation.Middleware;
+using BanRepPriceCapture.DtfWeeklyPoc.Shared.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile("appsettings.global.json", optional: true, reloadOnChange: true)
+    .AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true)
+    .AddJsonFile("appsettings.uat.json", optional: true, reloadOnChange: true)
+    .AddJsonFile("appsettings.prod.json", optional: true, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables();
 
 // Swagger / OpenAPI
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// HttpClient configurado para o SDMX do BanRep
-builder.Services.AddHttpClient<BanRepSdmxClient>(http =>
-{
-    http.BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/");
-    http.Timeout = TimeSpan.FromSeconds(30);
-    http.DefaultRequestHeaders.UserAgent.ParseAdd("BTG-DTF-Weekly-POC/.NET8");
-    http.DefaultRequestHeaders.Accept.ParseAdd("application/xml");
-});
+builder.Services.AddLogging(builder.Configuration);
+builder.Logging.AddAWSProvider(builder.Configuration.GetAWSLoggingConfigSection());
 
-// Job
-builder.Services.AddScoped<DtfDailyJob>();
-builder.Services.AddScoped<DtWeeklyJob>();
-
-builder.Services.Configure<DtfDailyCaptureSettings>(builder.Configuration.GetSection("DtfDailyCapture"));
-builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<DtfDailyCaptureSettings>>().Value);
-
-builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
-builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<RabbitMqSettings>>().Value);
-builder.Services.AddSingleton<IConnectionFactory>(sp =>
-{
-    var settings = sp.GetRequiredService<RabbitMqSettings>();
-    return new ConnectionFactory
-    {
-        HostName = settings.HostName,
-        Port = settings.Port,
-        UserName = settings.UserName,
-        Password = settings.Password,
-        VirtualHost = settings.VirtualHost,
-        DispatchConsumersAsync = true,
-        AutomaticRecoveryEnabled = true
-    };
-});
-
-builder.Services.AddHttpClient<DtfDailyPayloadSender>();
-builder.Services.AddScoped<DtfDailyPriceRepository>();
-builder.Services.AddScoped<DtfDailyCaptureWorkflow>();
-builder.Services.AddHostedService<DtfDailyRabbitConsumer>();
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 
@@ -57,94 +36,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-static DateOnly? ParseDate(string? s)
-    => DateOnly.TryParse(s, out var d) ? d : null;
-
-static IResult BuildSeriesResponse(
-    string series,
-    DateOnly? startDate,
-    DateOnly? endDate,
-    List<BanRepSeriesData> data)
-{
-    return Results.Ok(new DtfSeriesResponse(
-        series,
-        startDate,
-        endDate,
-        data.Count,
-        data));
-}
-
-static IResult HandleException(Exception ex)
-{
-    return ex switch
-    {
-        TimeoutException timeout => Results.Problem(
-            title: "Timeout ao consultar BanRep SDMX",
-            detail: timeout.Message,
-            statusCode: StatusCodes.Status504GatewayTimeout),
-        BanRepSdmxException sdmx => Results.Problem(
-            title: "Erro retornado pelo BanRep SDMX",
-            detail: sdmx.Message,
-            statusCode: StatusCodes.Status502BadGateway),
-        HttpRequestException http => Results.Problem(
-            title: "Falha de rede ao consultar BanRep SDMX",
-            detail: http.Message,
-            statusCode: StatusCodes.Status502BadGateway),
-        _ => Results.Problem(
-            title: "Erro inesperado",
-            detail: ex.Message,
-            statusCode: StatusCodes.Status500InternalServerError)
-    };
-}
-
-// GET /dtf-daily?start=2023-01-01&end=2024-12-31
-app.MapGet("/dtf-daily", async (
-    [AsParameters] DtfSeriesRequest request,
-    DtfDailyJob job,
-    CancellationToken ct) =>
-{
-    var startDate = ParseDate(request.Start);
-    var endDate = ParseDate(request.End);
-
-    try
-    {
-        var data = await job.ExecuteAsync(startDate, endDate, ct);
-
-        return BuildSeriesResponse(
-            "DTF 90 dias (diario, direto do SDMX)",
-            startDate,
-            endDate,
-            data);
-    }
-    catch (Exception ex)
-    {
-        return HandleException(ex);
-    }
-});
-
-// GET /dtf-weekly?start=2023-01-01&end=2024-12-31
-app.MapGet("/dtf-weekly", async (
-    [AsParameters] DtfSeriesRequest request,
-    DtWeeklyJob job,
-    CancellationToken ct) =>
-{
-    var startDate = ParseDate(request.Start);
-    var endDate = ParseDate(request.End);
-
-    try
-    {
-        var data = await job.ExecuteAsync(startDate, endDate, ct);
-
-        return BuildSeriesResponse(
-            "DTF 90 dias (semanal, agregado a partir do SDMX diario)",
-            startDate,
-            endDate,
-            data);
-    }
-    catch (Exception ex)
-    {
-        return HandleException(ex);
-    }
-});
+app.UseMiddleware<FlowIdMiddleware>();
+app.MapDtfEndpoints();
 
 app.Run();
