@@ -22,7 +22,7 @@ namespace BanRepPriceCapture.InfrastructureLayer.DependencyInjection;
 
 public static class InfrastructureServiceCollectionExtensions
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddInfrastructureLayer(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<DtfDailyCaptureSettings>(configuration.GetSection("DtfDailyCapture"));
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<DtfDailyCaptureSettings>>().Value);
