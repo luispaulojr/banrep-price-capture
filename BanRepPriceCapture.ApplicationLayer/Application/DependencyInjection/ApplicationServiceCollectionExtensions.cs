@@ -6,7 +6,7 @@ namespace BanRepPriceCapture.ApplicationLayer.DependencyInjection;
 
 public static class ApplicationServiceCollectionExtensions
 {
-    public static IServiceCollection AddApplication(this IServiceCollection services)
+    public static IServiceCollection AddApplicationLayer(this IServiceCollection services)
     {
         services.AddScoped<DtfDailyJob>();
         services.AddScoped<DtfWeeklyJob>();

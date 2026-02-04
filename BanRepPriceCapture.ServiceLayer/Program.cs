@@ -1,7 +1,5 @@
 using AWS.Logger.AspNetCore;
-using BanRepPriceCapture.ApplicationLayer.DependencyInjection;
-using BanRepPriceCapture.InfrastructureLayer.DependencyInjection;
-using BanRepPriceCapture.InfrastructureLayer.Logging;
+using BanRepPriceCapture.ServiceLayer.DependencyInjection;
 using BanRepPriceCapture.ServiceLayer.Presentation.Endpoints;
 using BanRepPriceCapture.ServiceLayer.Presentation.Middleware;
 
@@ -16,15 +14,9 @@ builder.Configuration
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
-// Swagger / OpenAPI
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-builder.Services.AddLogging(builder.Configuration);
 builder.Logging.AddAWSProvider(builder.Configuration.GetAWSLoggingConfigSection());
 
-builder.Services.AddApplication();
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddServiceLayer(builder.Configuration);
 
 var app = builder.Build();
 
