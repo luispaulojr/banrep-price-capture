@@ -17,4 +17,8 @@
     <PackageReference Include="Npgsql" Version="8.0.5" />
     <PackageReference Include="RabbitMQ.Client" Version="6.8.1" />
   </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Infrastructure/Database/queries.sql" />
+  </ItemGroup>
 </Project>
