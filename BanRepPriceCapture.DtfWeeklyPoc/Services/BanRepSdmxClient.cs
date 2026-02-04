@@ -137,6 +137,15 @@ public sealed class BanRepSdmxClient(HttpClient http)
         return obs;
     }
 
+    internal static List<BanRepSeriesData> AggregateWeeklyByIsoWeek(IEnumerable<BanRepSeriesData> daily)
+    {
+        return daily
+            .GroupBy(d => IsoWeekKey(d.Date))
+            .Select(g => g.OrderBy(x => x.Date).Last())
+            .OrderBy(x => x.Date)
+            .ToList();
+    }
+
     private static bool TryParseSdmxDate(string raw, out DateOnly date)
     {
         // A doc mostra exemplo 20240816 (AAAAMMDD), mas alguns SDMX retornam yyyy-MM-dd.
