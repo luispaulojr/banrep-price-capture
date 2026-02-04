@@ -16,6 +16,69 @@ public sealed class BanRepSdmxClient(HttpClient http)
     // No PDF, DTF 90 dias historico: DF_DTF_DAILY_HIST
     private const string DtfDailyHistFlowId = "DF_DTF_DAILY_HIST";
 
+    public async Task<List<BanRepSeriesData>> GetDtfDailyAsync(
+        DateOnly? start = null,
+        DateOnly? end = null,
+        CancellationToken ct = default)
+    {
+        // Monta URL conforme guia:
+        // /rest/data/{AGENCY_ID},{FLOW_ID},{VERSION}/all/ALL/?startPeriod=...&endPeriod=...&dimensionAtObservation=TIME_PERIOD&detail=full
+        var url = BuildDtfUrl(start, end);
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Accept.ParseAdd("application/xml");
+
+        HttpResponseMessage resp;
+        try
+        {
+            resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException("Timeout ao chamar o SDMX do BanRep.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new HttpRequestException("Falha de rede ao chamar o SDMX do BanRep.", ex);
+        }
+
+        var mediaType = resp.Content.Headers.ContentType?.MediaType;
+
+        if (mediaType is null || !mediaType.Contains("xml", StringComparison.OrdinalIgnoreCase))
+        {
+            var body = await SafeReadBody(resp, ct);
+            throw new BanRepSdmxException(
+                $"Resposta inesperada do BanRep. Content-Type={mediaType ?? "<null>"}. Body={(body ?? "<vazio>")}");
+        }
+        
+        // O PDF descreve erros HTTP comuns: 400, 404, 500, 503
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+        {
+            return [];
+        }
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await SafeReadBody(resp, ct);
+            throw new BanRepSdmxException(
+                $"Erro do BanRep SDMX. Status={(int)resp.StatusCode} {resp.ReasonPhrase}. Body={(body ?? "<vazio>")}");
+        }
+
+        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+
+        // O serviço retorna SDMX-ML (XML). A observação vem como:
+        // <generic:Obs>
+        //   <generic:ObsDimension value="2024-08-16" />
+        //   <generic:ObsValue value="10.751" />
+        // </generic:Obs>
+        //
+        // A documentação explica que TIME_PERIOD é a dimensão do tempo e OBS_VALUE é o valor.
+        var daily = ParseSdmxGenericData(stream);
+
+        // Mantemos a granularidade diaria do SDMX sem agregacao.
+        return daily;
+    }
+    
     public async Task<List<BanRepSeriesData>> GetDtWeeklyAsync(
         DateOnly? start = null,
         DateOnly? end = null,
@@ -82,26 +145,13 @@ public sealed class BanRepSdmxClient(HttpClient http)
         return weekly;
     }
 
-    private static string BuildDtfUrl(DateOnly? start, DateOnly? end)
+    internal static List<BanRepSeriesData> AggregateWeeklyByIsoWeek(IEnumerable<BanRepSeriesData> daily)
     {
-        // Regras obrigatorias:
-        // - startPeriod/endPeriod devem conter apenas o ano (YYYY).
-        // - A data de referencia e a data de entrada do dia corrente.
-        // - startPeriod = ano - 1, endPeriod = ano + 1.
-        var referenceDate = end ?? start ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var year = referenceDate.Year;
-
-        var query = new List<string>
-        {
-            $"startPeriod={year - 1:0000}",
-            $"endPeriod={year + 1:0000}",
-            "dimensionAtObservation=TIME_PERIOD",
-            "detail=full"
-        };
-
-        var qs = string.Join("&", query);
-
-        return $"{AgencyId},{DtfDailyHistFlowId},{Version}/all/ALL/?{qs}";
+        return daily
+            .GroupBy(d => IsoWeekKey(d.Date))
+            .Select(g => g.OrderBy(x => x.Date).Last())
+            .OrderBy(x => x.Date)
+            .ToList();
     }
 
     internal static List<BanRepSeriesData> ParseSdmxGenericData(Stream xmlStream)
@@ -139,14 +189,35 @@ public sealed class BanRepSdmxClient(HttpClient http)
 
         return obs;
     }
-
-    internal static List<BanRepSeriesData> AggregateWeeklyByIsoWeek(IEnumerable<BanRepSeriesData> daily)
+    
+    private static string BuildDtfUrl(DateOnly? start, DateOnly? end)
     {
-        return daily
-            .GroupBy(d => IsoWeekKey(d.Date))
-            .Select(g => g.OrderBy(x => x.Date).Last())
-            .OrderBy(x => x.Date)
-            .ToList();
+        // Regras obrigatorias:
+        // - startPeriod/endPeriod devem conter apenas o ano (YYYY).
+        // - A data de referencia e a data de entrada do dia corrente.
+        // - startPeriod = ano - 1, endPeriod = ano + 1.
+        var referenceDate = end ?? start ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var year = referenceDate.Year;
+
+        var query = new List<string>
+        {
+            $"startPeriod={year - 1:0000}",
+            $"endPeriod={year + 1:0000}",
+            "dimensionAtObservation=TIME_PERIOD",
+            "detail=full"
+        };
+
+        var qs = string.Join("&", query);
+
+        return $"{AgencyId},{DtfDailyHistFlowId},{Version}/all/ALL/?{qs}";
+    }
+    
+    private static string IsoWeekKey(DateOnly date)
+    {
+        var dt = date.ToDateTime(TimeOnly.MinValue);
+        var week = ISOWeek.GetWeekOfYear(dt);
+        var year = ISOWeek.GetYear(dt);
+        return $"{year:D4}-W{week:D2}";
     }
 
     private static bool TryParseSdmxDate(string raw, out DateOnly date)
@@ -180,14 +251,6 @@ public sealed class BanRepSdmxClient(HttpClient http)
             NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
             CultureInfo.InvariantCulture,
             out value);
-    }
-
-    private static string IsoWeekKey(DateOnly date)
-    {
-        var dt = date.ToDateTime(TimeOnly.MinValue);
-        var week = ISOWeek.GetWeekOfYear(dt);
-        var year = ISOWeek.GetYear(dt);
-        return $"{year:D4}-W{week:D2}";
     }
 
     private static async Task<string?> SafeReadBody(HttpResponseMessage resp, CancellationToken ct)

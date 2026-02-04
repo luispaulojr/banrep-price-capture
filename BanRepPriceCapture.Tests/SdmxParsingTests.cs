@@ -65,7 +65,7 @@ public sealed class SdmxParsingTests
         http.BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/");
         var client = new BanRepSdmxClient(http);
 
-        var weekly = await client.GetDtWeeklyAsync(start: new DateOnly(2026, 2, 3));
+        var weekly = await client.GetDtfDailyAsync(start: new DateOnly(2026, 2, 3));
 
         Assert.Equal(2, weekly.Count);
         Assert.Equal(new DateOnly(2025, 1, 2), weekly[0].Date);
