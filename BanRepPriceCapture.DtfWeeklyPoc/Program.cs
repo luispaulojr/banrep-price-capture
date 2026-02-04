@@ -1,4 +1,5 @@
 using BanRepPriceCapture.DtfWeeklyPoc.Jobs;
+using BanRepPriceCapture.DtfWeeklyPoc.Models;
 using BanRepPriceCapture.DtfWeeklyPoc.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +18,7 @@ builder.Services.AddHttpClient<BanRepSdmxClient>(http =>
 });
 
 // Job
+builder.Services.AddScoped<DtfDailyJob>();
 builder.Services.AddScoped<DtWeeklyJob>();
 
 var app = builder.Build();
@@ -28,52 +30,93 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// GET /dtf-weekly?start=2023-01-01&end=2024-12-31
-app.MapGet("/dtf-weekly", async (
-    string? start,
-    string? end,
-    DtWeeklyJob job,
+static DateOnly? ParseDate(string? s)
+    => DateOnly.TryParse(s, out var d) ? d : null;
+
+static IResult BuildSeriesResponse(
+    string series,
+    DateOnly? startDate,
+    DateOnly? endDate,
+    List<BanRepSeriesData> data)
+{
+    return Results.Ok(new DtfSeriesResponse(
+        series,
+        startDate,
+        endDate,
+        data.Count,
+        data));
+}
+
+static IResult HandleException(Exception ex)
+{
+    return ex switch
+    {
+        TimeoutException timeout => Results.Problem(
+            title: "Timeout ao consultar BanRep SDMX",
+            detail: timeout.Message,
+            statusCode: StatusCodes.Status504GatewayTimeout),
+        BanRepSdmxException sdmx => Results.Problem(
+            title: "Erro retornado pelo BanRep SDMX",
+            detail: sdmx.Message,
+            statusCode: StatusCodes.Status502BadGateway),
+        HttpRequestException http => Results.Problem(
+            title: "Falha de rede ao consultar BanRep SDMX",
+            detail: http.Message,
+            statusCode: StatusCodes.Status502BadGateway),
+        _ => Results.Problem(
+            title: "Erro inesperado",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError)
+    };
+}
+
+// GET /dtf-daily?start=2023-01-01&end=2024-12-31
+app.MapGet("/dtf-daily", async (
+    [AsParameters] DtfSeriesRequest request,
+    DtfDailyJob job,
     CancellationToken ct) =>
 {
-    static DateOnly? ParseDate(string? s)
-        => DateOnly.TryParse(s, out var d) ? d : null;
-
-    var startDate = ParseDate(start);
-    var endDate = ParseDate(end);
+    var startDate = ParseDate(request.Start);
+    var endDate = ParseDate(request.End);
 
     try
     {
         var data = await job.ExecuteAsync(startDate, endDate, ct);
 
-        return Results.Ok(new
-        {
-            series = "DTF 90 dias (semanal, agregado a partir do SDMX diario)",
-            start = startDate,
-            end = endDate,
-            count = data.Count,
-            data
-        });
+        return BuildSeriesResponse(
+            "DTF 90 dias (diario, direto do SDMX)",
+            startDate,
+            endDate,
+            data);
     }
-    catch (TimeoutException ex)
+    catch (Exception ex)
     {
-        return Results.Problem(
-            title: "Timeout ao consultar BanRep SDMX",
-            detail: ex.Message,
-            statusCode: StatusCodes.Status504GatewayTimeout);
+        return HandleException(ex);
     }
-    catch (BanRepSdmxException ex)
+});
+
+// GET /dtf-weekly?start=2023-01-01&end=2024-12-31
+app.MapGet("/dtf-weekly", async (
+    [AsParameters] DtfSeriesRequest request,
+    DtWeeklyJob job,
+    CancellationToken ct) =>
+{
+    var startDate = ParseDate(request.Start);
+    var endDate = ParseDate(request.End);
+
+    try
     {
-        return Results.Problem(
-            title: "Erro retornado pelo BanRep SDMX",
-            detail: ex.Message,
-            statusCode: StatusCodes.Status502BadGateway);
+        var data = await job.ExecuteAsync(startDate, endDate, ct);
+
+        return BuildSeriesResponse(
+            "DTF 90 dias (semanal, agregado a partir do SDMX diario)",
+            startDate,
+            endDate,
+            data);
     }
-    catch (HttpRequestException ex)
+    catch (Exception ex)
     {
-        return Results.Problem(
-            title: "Falha de rede ao consultar BanRep SDMX",
-            detail: ex.Message,
-            statusCode: StatusCodes.Status502BadGateway);
+        return HandleException(ex);
     }
 });
 
