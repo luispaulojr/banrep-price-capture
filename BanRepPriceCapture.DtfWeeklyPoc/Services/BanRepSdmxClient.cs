@@ -85,41 +85,6 @@ public sealed class BanRepSdmxClient(HttpClient http)
 
         return AggregateWeeklyByIsoWeek(daily);
     }
-    
-    public async Task<List<BanRepSeriesData>> GetDtWeeklyAsync(
-        DateOnly? start = null,
-        DateOnly? end = null,
-        CancellationToken ct = default)
-    {
-        // Regras obrigatorias:
-        // - startPeriod/endPeriod devem conter apenas o ano (YYYY).
-        // - A data de referencia e a data de entrada do dia corrente.
-        // - startPeriod = ano - 1, endPeriod = ano + 1.
-        var referenceDate = end ?? start ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var year = referenceDate.Year;
-
-        var query = new List<string>
-        {
-            $"startPeriod={year - 1:0000}",
-            $"endPeriod={year + 1:0000}",
-            "dimensionAtObservation=TIME_PERIOD",
-            "detail=full"
-        };
-
-        var qs = string.Join("&", query);
-
-        // O serviço retorna SDMX-ML (XML). A observação vem como:
-        // <generic:Obs>
-        //   <generic:ObsDimension value="2024-08-16" />
-        //   <generic:ObsValue value="10.751" />
-        // </generic:Obs>
-        //
-        // A documentação explica que TIME_PERIOD é a dimensão do tempo e OBS_VALUE é o valor.
-        var daily = ParseSdmxGenericData(stream);
-
-        // Mantemos a granularidade diaria do SDMX sem agregacao.
-        return daily;
-    }
 
     internal static List<BanRepSeriesData> AggregateWeeklyByIsoWeek(IEnumerable<BanRepSeriesData> daily)
     {
@@ -194,15 +159,6 @@ public sealed class BanRepSdmxClient(HttpClient http)
         var week = ISOWeek.GetWeekOfYear(dt);
         var year = ISOWeek.GetYear(dt);
         return $"{year:D4}-W{week:D2}";
-    }
-
-    internal static List<BanRepSeriesData> AggregateWeeklyByIsoWeek(IEnumerable<BanRepSeriesData> daily)
-    {
-        return daily
-            .GroupBy(d => IsoWeekKey(d.Date))
-            .Select(g => g.OrderBy(x => x.Date).Last())
-            .OrderBy(x => x.Date)
-            .ToList();
     }
 
     private static bool TryParseSdmxDate(string raw, out DateOnly date)
