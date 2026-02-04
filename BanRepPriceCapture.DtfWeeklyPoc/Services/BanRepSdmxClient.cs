@@ -75,46 +75,33 @@ public sealed class BanRepSdmxClient(HttpClient http)
         // A documentação explica que TIME_PERIOD é a dimensão do tempo e OBS_VALUE é o valor.
         var daily = ParseSdmxGenericData(stream);
 
-        // "DTF semanal": como o PDF não lista um FLOW_ID weekly,
-        // agregamos para semanal pegando a ultima observacao por semana ISO.
-        var weekly = daily
-            .GroupBy(d => IsoWeekKey(d.Date))
-            .Select(g => g.OrderBy(x => x.Date).Last())
-            .OrderBy(x => x.Date)
-            .ToList();
-
-        return weekly;
+        // Mantemos a granularidade diaria do SDMX sem agregacao.
+        return daily;
     }
 
     private static string BuildDtfUrl(DateOnly? start, DateOnly? end)
     {
-        // Observacao:
-        // - startPeriod/endPeriod aceitam AAAA, AAAA-MM, AAAA-MM-DD.
-        // - O PDF fala de semantica "menor que" pelo menos no nivel de ano.
-        // Para evitar corte no dia final, enviamos endPeriod como (end + 1 dia) quando vier com dia.
+        // Regras obrigatorias:
+        // - startPeriod/endPeriod devem conter apenas o ano (YYYY).
+        // - A data de referencia e a data de entrada do dia corrente.
+        // - startPeriod = ano - 1, endPeriod = ano + 1.
+        var referenceDate = end ?? start ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var year = referenceDate.Year;
+
         var query = new List<string>
         {
+            $"startPeriod={year - 1:0000}",
+            $"endPeriod={year + 1:0000}",
             "dimensionAtObservation=TIME_PERIOD",
             "detail=full"
         };
-
-        if (start is not null)
-        {
-            query.Add($"startPeriod={start:yyyy-MM-dd}");
-        }
-
-        if (end is not null)
-        {
-            var exclusive = end.Value.AddDays(1);
-            query.Add($"endPeriod={exclusive:yyyy-MM-dd}");
-        }
 
         var qs = string.Join("&", query);
 
         return $"{AgencyId},{DtfDailyHistFlowId},{Version}/all/ALL/?{qs}";
     }
 
-    private static List<BanRepSeriesData> ParseSdmxGenericData(Stream xmlStream)
+    internal static List<BanRepSeriesData> ParseSdmxGenericData(Stream xmlStream)
     {
         var doc = XDocument.Load(xmlStream);
 
@@ -181,14 +168,6 @@ public sealed class BanRepSdmxClient(HttpClient http)
             NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
             CultureInfo.InvariantCulture,
             out value);
-    }
-
-    private static string IsoWeekKey(DateOnly date)
-    {
-        var dt = date.ToDateTime(TimeOnly.MinValue);
-        var week = ISOWeek.GetWeekOfYear(dt);
-        var year = ISOWeek.GetYear(dt);
-        return $"{year:D4}-W{week:D2}";
     }
 
     private static async Task<string?> SafeReadBody(HttpResponseMessage resp, CancellationToken ct)
