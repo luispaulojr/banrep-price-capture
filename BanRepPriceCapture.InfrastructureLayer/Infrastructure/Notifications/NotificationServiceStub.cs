@@ -1,8 +1,8 @@
 using System.Net;
-using BanRepPriceCapture.ApplicationLayer.Notifications;
 using BanRepPriceCapture.ApplicationLayer.Logging;
+using BanRepPriceCapture.ApplicationLayer.Notifications;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Notifications;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Notifications;
 
 public sealed class NotificationServiceStub(IStructuredLogger logger) : INotificationService
 {

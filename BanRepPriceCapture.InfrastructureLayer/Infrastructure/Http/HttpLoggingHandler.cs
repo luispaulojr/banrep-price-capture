@@ -1,6 +1,6 @@
 using BanRepPriceCapture.ApplicationLayer.Logging;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Http;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Http;
 
 public sealed class HttpLoggingHandler(IStructuredLogger logger) : DelegatingHandler
 {

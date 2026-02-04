@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using BanRepPriceCapture.DomainLayer.Models;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
-using BanRepPriceCapture.InfrastructureLayer.Resilience;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
 

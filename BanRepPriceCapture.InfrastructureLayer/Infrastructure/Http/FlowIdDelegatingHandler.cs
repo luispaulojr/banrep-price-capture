@@ -1,6 +1,6 @@
 using BanRepPriceCapture.ApplicationLayer.Flow;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Http;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Http;
 
 public sealed class FlowIdDelegatingHandler(IFlowContextAccessor flowContext) : DelegatingHandler
 {

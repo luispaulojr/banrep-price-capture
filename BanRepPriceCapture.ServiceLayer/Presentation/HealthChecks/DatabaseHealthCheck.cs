@@ -1,4 +1,5 @@
 using BanRepPriceCapture.InfrastructureLayer.Database;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace BanRepPriceCapture.ServiceLayer.Presentation.HealthChecks;

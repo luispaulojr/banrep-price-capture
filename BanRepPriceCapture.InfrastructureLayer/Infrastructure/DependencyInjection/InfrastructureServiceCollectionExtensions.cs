@@ -1,30 +1,21 @@
-using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-
-using Amazon.SecretsManager;
-using BanRepPriceCapture.ApplicationLayer.Interfaces;
-using BanRepPriceCapture.ApplicationLayer.Notifications;
-using BanRepPriceCapture.InfrastructureLayer.Database;
-using BanRepPriceCapture.InfrastructureLayer.Http;
-using BanRepPriceCapture.InfrastructureLayer.Notifications;
-using BanRepPriceCapture.InfrastructureLayer.Outbound;
-using BanRepPriceCapture.InfrastructureLayer.Repositories;
-using BanRepPriceCapture.InfrastructureLayer.Configuration;
-using BanRepPriceCapture.InfrastructureLayer.Resilience;
 using BanRepPriceCapture.ApplicationLayer.Flow;
+using BanRepPriceCapture.ApplicationLayer.Interfaces;
 using BanRepPriceCapture.ApplicationLayer.Logging;
+using BanRepPriceCapture.ApplicationLayer.Notifications;
+using BanRepPriceCapture.InfrastructureLayer.Configuration;
+using BanRepPriceCapture.InfrastructureLayer.Database;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Aws;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database.TypeHandlers;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Http;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Messaging;
-using Dapper;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-using RabbitMQ.Client;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Notifications;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Outbound;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Repositories;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 
-namespace BanRepPriceCapture.InfrastructureLayer.DependencyInjection;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.DependencyInjection;
 
 public static class InfrastructureServiceCollectionExtensions
 {

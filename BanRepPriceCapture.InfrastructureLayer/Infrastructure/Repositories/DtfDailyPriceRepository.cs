@@ -2,10 +2,10 @@ using System.Text.Json;
 using BanRepPriceCapture.ApplicationLayer.Interfaces;
 using BanRepPriceCapture.DomainLayer.Models;
 using BanRepPriceCapture.InfrastructureLayer.Database;
-using BanRepPriceCapture.InfrastructureLayer.Resilience;
-using Dapper;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Repositories;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Repositories;
 
 public sealed class DtfDailyPriceRepository(
     IDatabaseConnectionFactory connectionFactory,

@@ -1,10 +1,8 @@
 using System.Net.Sockets;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
-using Npgsql;
-using RabbitMQ.Client.Exceptions;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Resilience;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 
 public sealed class RetryPolicyProvider(
     IStructuredLogger logger,

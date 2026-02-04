@@ -1,9 +1,9 @@
 using BanRepPriceCapture.ApplicationLayer.Interfaces;
-using BanRepPriceCapture.DomainLayer.Models;
 using BanRepPriceCapture.ApplicationLayer.Logging;
+using BanRepPriceCapture.DomainLayer.Models;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Outbound;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Outbound;
 
 public sealed class DtfDailyPayloadSender(
     IDtfDailyOutboundClient outboundClient,

@@ -3,7 +3,7 @@ using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
 using BanRepPriceCapture.ApplicationLayer.Workflows;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
-using BanRepPriceCapture.InfrastructureLayer.Resilience;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Messaging;
 
