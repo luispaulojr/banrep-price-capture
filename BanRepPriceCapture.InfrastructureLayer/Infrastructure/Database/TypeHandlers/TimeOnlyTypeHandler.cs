@@ -1,5 +1,7 @@
 using System.Data;
 using Dapper;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Database.TypeHandlers;
 
@@ -7,6 +9,13 @@ public sealed class TimeOnlyTypeHandler : SqlMapper.TypeHandler<TimeOnly>
 {
     public override void SetValue(IDbDataParameter parameter, TimeOnly value)
     {
+        if (parameter is NpgsqlParameter npgsqlParameter)
+        {
+            npgsqlParameter.NpgsqlDbType = NpgsqlDbType.Time;
+            npgsqlParameter.Value = value;
+            return;
+        }
+
         parameter.DbType = DbType.Time;
         parameter.Value = value.ToTimeSpan();
     }
@@ -17,7 +26,8 @@ public sealed class TimeOnlyTypeHandler : SqlMapper.TypeHandler<TimeOnly>
         {
             TimeSpan ts => TimeOnly.FromTimeSpan(ts),
             TimeOnly timeOnly => timeOnly,
-            _ => TimeOnly.FromTimeSpan((TimeSpan)value)
+            DateTime dt => TimeOnly.FromDateTime(dt),
+            _ => TimeOnly.FromDateTime(Convert.ToDateTime(value))
         };
     }
 }
