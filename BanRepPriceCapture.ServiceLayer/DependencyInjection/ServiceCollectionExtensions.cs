@@ -2,6 +2,7 @@ using BanRepPriceCapture.ApplicationLayer.DependencyInjection;
 using BanRepPriceCapture.DomainLayer.DependencyInjection;
 using BanRepPriceCapture.InfrastructureLayer.DependencyInjection;
 using BanRepPriceCapture.InfrastructureLayer.Logging;
+using BanRepPriceCapture.ServiceLayer.Presentation.HealthChecks;
 using BanRepPriceCapture.ServiceLayer.Presentation.Middleware;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,10 @@ public static class ServiceCollectionExtensions
         services.AddApplicationLayer();
         services.AddDomainLayer();
         services.AddInfrastructureLayer(configuration);
+        services.AddHealthChecks()
+            .AddCheck<DatabaseHealthCheck>("database")
+            .AddCheck<RabbitMqHealthCheck>("rabbitmq")
+            .AddCheck<SdmxHealthCheck>("sdmx");
         services.AddTransient<FlowIdMiddleware>();
 
         return services;
