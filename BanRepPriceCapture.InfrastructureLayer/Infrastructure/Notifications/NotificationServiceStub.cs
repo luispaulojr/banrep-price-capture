@@ -1,6 +1,6 @@
 using System.Net;
+using BanRepPriceCapture.ApplicationLayer.Application.Notifications;
 using BanRepPriceCapture.ApplicationLayer.Logging;
-using BanRepPriceCapture.ApplicationLayer.Notifications;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Notifications;
 

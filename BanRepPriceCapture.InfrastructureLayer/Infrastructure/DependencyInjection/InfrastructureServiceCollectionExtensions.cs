@@ -1,19 +1,24 @@
-using BanRepPriceCapture.ApplicationLayer.Flow;
-using BanRepPriceCapture.ApplicationLayer.Interfaces;
-using BanRepPriceCapture.ApplicationLayer.Logging;
-using BanRepPriceCapture.ApplicationLayer.Notifications;
-using BanRepPriceCapture.InfrastructureLayer.Configuration;
-using BanRepPriceCapture.InfrastructureLayer.Database;
-using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Aws;
-using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
+using Amazon.SecretsManager;
+using BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
+using BanRepPriceCapture.ApplicationLayer.Application.Notifications;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database;
-using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database.TypeHandlers;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Http;
-using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Messaging;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Notifications;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Outbound;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Repositories;
+using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
+using BanRepPriceCapture.ApplicationLayer.Flow;
+using BanRepPriceCapture.ApplicationLayer.Logging;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Aws;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database.TypeHandlers;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Messaging;
+using Dapper;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using RabbitMQ.Client;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.DependencyInjection;
 
@@ -108,7 +113,7 @@ public static class InfrastructureServiceCollectionExtensions
             {
                 var settings = sp.GetRequiredService<SdmxServiceSettings>();
                 http.BaseAddress = new Uri(settings.BaseUrl, UriKind.Absolute);
-                http.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds ?? 30);
+                http.Timeout = TimeSpan.FromSeconds((double)(settings.TimeoutSeconds ?? 30));
                 http.DefaultRequestHeaders.UserAgent.ParseAdd("BTG-DTF-Weekly-POC/.NET8");
                 http.DefaultRequestHeaders.Accept.ParseAdd("application/xml");
             })
@@ -120,7 +125,7 @@ public static class InfrastructureServiceCollectionExtensions
                 var settings = sp.GetRequiredService<DtfDailyOutboundServiceSettings>();
                 if (settings.TimeoutSeconds.HasValue)
                 {
-                    http.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds.Value);
+                    http.Timeout = TimeSpan.FromSeconds((double)settings.TimeoutSeconds.Value);
                 }
             })
             .AddHttpMessageHandler<HttpLoggingHandler>()
@@ -139,7 +144,7 @@ public static class InfrastructureServiceCollectionExtensions
 
                 if (settings.TimeoutSeconds.HasValue)
                 {
-                    http.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds.Value);
+                    http.Timeout = TimeSpan.FromSeconds((double)settings.TimeoutSeconds.Value);
                 }
             })
             .AddHttpMessageHandler<HttpLoggingHandler>()

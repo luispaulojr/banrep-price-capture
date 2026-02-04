@@ -1,3 +1,5 @@
+using Npgsql;
+
 namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database;
 
 public interface IDatabaseConnectionFactory

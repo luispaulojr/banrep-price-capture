@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
-using BanRepPriceCapture.ApplicationLayer.Models;
+using BanRepPriceCapture.ApplicationLayer.Application.Models;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 using Microsoft.Extensions.DependencyInjection;

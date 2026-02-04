@@ -1,6 +1,6 @@
-using BanRepPriceCapture.ApplicationLayer.Models;
+using BanRepPriceCapture.ApplicationLayer.Application.Models;
 
-namespace BanRepPriceCapture.ApplicationLayer.Interfaces;
+namespace BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
 
 public interface ISdmxClient
 {

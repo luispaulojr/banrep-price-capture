@@ -1,4 +1,4 @@
-using BanRepPriceCapture.DomainLayer.Models;
+using BanRepPriceCapture.DomainLayer.Domain.Models;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
 

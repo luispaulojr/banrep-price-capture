@@ -11,11 +11,11 @@ public sealed class RetryPolicyProvider(
     private readonly IReadOnlyDictionary<RetryPolicyKind, RetryPolicy> _policies =
         new Dictionary<RetryPolicyKind, RetryPolicy>
         {
-            [RetryPolicyKind.SdmxHttp] = RetryPolicy.Create(3, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1)),
-            [RetryPolicyKind.OutboundHttpPost] = RetryPolicy.Create(3, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1)),
-            [RetryPolicyKind.NotificationHttpPost] = RetryPolicy.Create(3, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1)),
+            [RetryPolicyKind.SdmxHttp] = RetryPolicy.Create(3, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1d)),
+            [RetryPolicyKind.OutboundHttpPost] = RetryPolicy.Create(3, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1d)),
+            [RetryPolicyKind.NotificationHttpPost] = RetryPolicy.Create(3, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1d)),
             [RetryPolicyKind.DatabaseConnection] = RetryPolicy.Create(3, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(500)),
-            [RetryPolicyKind.RabbitMqConnection] = RetryPolicy.Create(5, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4))
+            [RetryPolicyKind.RabbitMqConnection] = RetryPolicy.Create(5, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1d), TimeSpan.FromSeconds(2d), TimeSpan.FromSeconds(4d))
         };
 
     public Task ExecuteAsync(

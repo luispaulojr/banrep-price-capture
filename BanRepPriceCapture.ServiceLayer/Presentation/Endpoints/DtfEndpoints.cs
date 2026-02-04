@@ -1,5 +1,6 @@
-using BanRepPriceCapture.ApplicationLayer.Models;
-using BanRepPriceCapture.ApplicationLayer.Workflows;
+using BanRepPriceCapture.ApplicationLayer.Application.Models;
+using BanRepPriceCapture.ApplicationLayer.Application.Workflows;
+using BanRepPriceCapture.ApplicationLayer.Exceptions;
 
 namespace BanRepPriceCapture.ServiceLayer.Presentation.Endpoints;
 

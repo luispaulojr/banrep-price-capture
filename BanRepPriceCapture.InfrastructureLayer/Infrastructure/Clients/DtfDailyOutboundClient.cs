@@ -1,6 +1,6 @@
 using System.Text;
 using System.Text.Json;
-using BanRepPriceCapture.DomainLayer.Models;
+using BanRepPriceCapture.DomainLayer.Domain.Models;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 

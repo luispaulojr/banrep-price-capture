@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
-using BanRepPriceCapture.ApplicationLayer.Notifications;
+using BanRepPriceCapture.ApplicationLayer.Application.Notifications;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 

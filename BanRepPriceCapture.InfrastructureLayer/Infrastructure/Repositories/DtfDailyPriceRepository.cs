@@ -1,9 +1,9 @@
 using System.Text.Json;
-using BanRepPriceCapture.ApplicationLayer.Interfaces;
-using BanRepPriceCapture.DomainLayer.Models;
-using BanRepPriceCapture.InfrastructureLayer.Database;
+using BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
+using BanRepPriceCapture.DomainLayer.Domain.Models;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
+using Dapper;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Repositories;
 

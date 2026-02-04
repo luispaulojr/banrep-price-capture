@@ -1,6 +1,6 @@
-using BanRepPriceCapture.DomainLayer.Models;
+using BanRepPriceCapture.DomainLayer.Domain.Models;
 
-namespace BanRepPriceCapture.ApplicationLayer.Interfaces;
+namespace BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
 
 public interface IDtfDailyPayloadSender
 {
