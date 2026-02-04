@@ -40,6 +40,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<BearerTokenSettings>>().Value);
 
         services.AddSingleton<IFlowContextAccessor, FlowContextAccessor>();
+        services.AddSingleton<IFlowIdProvider, FlowIdProvider>();
 
         services.AddSingleton<IAmazonSecretsManager, AmazonSecretsManagerClient>();
         services.AddSingleton<IDatabaseSecretsProvider, AwsSecretsManagerDatabaseSecretsProvider>();
