@@ -15,6 +15,7 @@ public sealed class RetryPolicyProvider(
         {
             [RetryPolicyKind.SdmxHttp] = RetryPolicy.Create(3, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1)),
             [RetryPolicyKind.OutboundHttpPost] = RetryPolicy.Create(3, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1)),
+            [RetryPolicyKind.NotificationHttpPost] = RetryPolicy.Create(3, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1)),
             [RetryPolicyKind.DatabaseConnection] = RetryPolicy.Create(3, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(500)),
             [RetryPolicyKind.RabbitMqConnection] = RetryPolicy.Create(5, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4))
         };
@@ -82,7 +83,7 @@ public sealed class RetryPolicyProvider(
 
         return kind switch
         {
-            RetryPolicyKind.SdmxHttp or RetryPolicyKind.OutboundHttpPost => IsTransientHttp(ex),
+            RetryPolicyKind.SdmxHttp or RetryPolicyKind.OutboundHttpPost or RetryPolicyKind.NotificationHttpPost => IsTransientHttp(ex),
             RetryPolicyKind.DatabaseConnection => IsTransientDatabase(ex),
             RetryPolicyKind.RabbitMqConnection => IsTransientRabbit(ex),
             _ => false

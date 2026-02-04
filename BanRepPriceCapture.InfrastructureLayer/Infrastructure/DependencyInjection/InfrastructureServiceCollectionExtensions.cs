@@ -13,6 +13,7 @@ using BanRepPriceCapture.InfrastructureLayer.Repositories;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using BanRepPriceCapture.InfrastructureLayer.Resilience;
 using BanRepPriceCapture.ApplicationLayer.Flow;
+using BanRepPriceCapture.ApplicationLayer.Logging;
 using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,6 +40,9 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.Configure<BearerTokenSettings>(configuration.GetSection("BearerToken"));
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<BearerTokenSettings>>().Value);
+
+        services.Configure<NotificationServiceSettings>(configuration.GetSection("NotificationService"));
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<NotificationServiceSettings>>().Value);
 
         services.AddSingleton<IFlowContextAccessor, FlowContextAccessor>();
         services.AddSingleton<IFlowIdProvider, FlowIdProvider>();
@@ -100,13 +104,39 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddTransient<IDtfDailyPayloadSender, DtfDailyPayloadSender>();
 
+        services.AddHttpClient<HttpNotificationService>((sp, http) =>
+            {
+                var settings = sp.GetRequiredService<NotificationServiceSettings>();
+                if (Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var baseUri))
+                {
+                    http.BaseAddress = baseUri;
+                }
+            })
+            .AddHttpMessageHandler<HttpLoggingHandler>()
+            .AddHttpMessageHandler<FlowIdDelegatingHandler>();
+
         services.AddTransient<HttpLoggingHandler>();
         services.AddTransient<FlowIdDelegatingHandler>();
         services.AddTransient<BearerTokenHandler>();
 
         services.AddScoped<IDtfDailyPriceRepository, DtfDailyPriceRepository>();
 
-        services.AddSingleton<INotificationService, NotificationServiceStub>();
+        services.AddSingleton<INotificationService>(sp =>
+        {
+            var settings = sp.GetRequiredService<NotificationServiceSettings>();
+            var logger = sp.GetRequiredService<IStructuredLogger>();
+
+            if (!Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out _))
+            {
+                logger.LogWarning(
+                    method: "NotificationService.Configuration",
+                    description: "NotificationService BaseUrl nao configurado.",
+                    message: "Using NotificationServiceStub.");
+                return new NotificationServiceStub(logger);
+            }
+
+            return sp.GetRequiredService<HttpNotificationService>();
+        });
 
         services.AddHostedService<DtfDailyRabbitConsumer>();
 
