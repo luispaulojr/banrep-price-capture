@@ -54,12 +54,29 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IConnectionFactory>(sp =>
         {
             var settings = sp.GetRequiredService<RabbitMqSettings>();
+            var userName = string.IsNullOrWhiteSpace(settings.UserName)
+                ? Environment.GetEnvironmentVariable(settings.UserNameEnvVar)
+                : settings.UserName;
+            var password = string.IsNullOrWhiteSpace(settings.Password)
+                ? Environment.GetEnvironmentVariable(settings.PasswordEnvVar)
+                : settings.Password;
+
+            if (string.IsNullOrWhiteSpace(userName))
+            {
+                throw new InvalidOperationException($"RabbitMQ username not configured. Set {settings.UserNameEnvVar} or RabbitMq:UserName.");
+            }
+
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                throw new InvalidOperationException($"RabbitMQ password not configured. Set {settings.PasswordEnvVar} or RabbitMq:Password.");
+            }
+
             return new ConnectionFactory
             {
                 HostName = settings.HostName,
                 Port = settings.Port,
-                UserName = settings.UserName,
-                Password = settings.Password,
+                UserName = userName,
+                Password = password,
                 VirtualHost = settings.VirtualHost,
                 DispatchConsumersAsync = true,
                 AutomaticRecoveryEnabled = true
