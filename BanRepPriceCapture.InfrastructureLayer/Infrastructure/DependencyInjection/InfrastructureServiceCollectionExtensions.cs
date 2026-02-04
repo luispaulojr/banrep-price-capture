@@ -76,10 +76,12 @@ public static class InfrastructureServiceCollectionExtensions
             .AddHttpMessageHandler<HttpLoggingHandler>()
             .AddHttpMessageHandler<FlowIdDelegatingHandler>();
 
-        services.AddHttpClient<IDtfDailyPayloadSender, DtfDailyPayloadSender>()
+        services.AddHttpClient<IDtfDailyOutboundClient, DtfDailyOutboundClient>()
             .AddHttpMessageHandler<HttpLoggingHandler>()
             .AddHttpMessageHandler<FlowIdDelegatingHandler>()
             .AddHttpMessageHandler<BearerTokenHandler>();
+
+        services.AddTransient<IDtfDailyPayloadSender, DtfDailyPayloadSender>();
 
         services.AddTransient<HttpLoggingHandler>();
         services.AddTransient<FlowIdDelegatingHandler>();

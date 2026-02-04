@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using BanRepPriceCapture.ApplicationLayer.Models;
 using BanRepPriceCapture.InfrastructureLayer.Clients;
+using BanRepPriceCapture.InfrastructureLayer.Resilience;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace BanRepPriceCapture.TestLayer;
@@ -61,8 +63,7 @@ public sealed class SdmxParsingTests
             return response;
         });
 
-        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/") };
-        var client = new BanRepSdmxClient(http);
+        var client = BuildClient(handler);
 
         var daily = await client.GetDtfDailyAsync(start: new DateOnly(2026, 2, 3));
 
@@ -99,8 +100,7 @@ public sealed class SdmxParsingTests
             return response;
         });
 
-        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/") };
-        var client = new BanRepSdmxClient(http);
+        var client = BuildClient(handler);
 
         var weekly = await client.GetDtfWeeklyAsync(start: new DateOnly(2026, 2, 3));
 
@@ -117,6 +117,19 @@ public sealed class SdmxParsingTests
         return File.OpenRead(path);
     }
 
+    private static BanRepSdmxClient BuildClient(HttpMessageHandler handler)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IRetryPolicyProvider, NoOpRetryPolicyProvider>();
+        services.AddHttpClient<BanRepSdmxClient>(http =>
+            {
+                http.BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/");
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+        var provider = services.BuildServiceProvider();
+        return provider.GetRequiredService<BanRepSdmxClient>();
+    }
+
     private sealed class FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> handler)
         : HttpMessageHandler
     {
@@ -127,6 +140,27 @@ public sealed class SdmxParsingTests
             CancellationToken cancellationToken)
         {
             return Task.FromResult(_handler(request));
+        }
+    }
+
+    private sealed class NoOpRetryPolicyProvider : IRetryPolicyProvider
+    {
+        public Task ExecuteAsync(
+            Func<CancellationToken, Task> action,
+            RetryPolicyKind kind,
+            string method,
+            CancellationToken ct)
+        {
+            return action(ct);
+        }
+
+        public Task<T> ExecuteAsync<T>(
+            Func<CancellationToken, Task<T>> action,
+            RetryPolicyKind kind,
+            string method,
+            CancellationToken ct)
+        {
+            return action(ct);
         }
     }
 }
