@@ -38,11 +38,33 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<DatabaseSecretSettings>(configuration.GetSection("DatabaseSecrets"));
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<DatabaseSecretSettings>>().Value);
 
-        services.Configure<BearerTokenSettings>(configuration.GetSection("BearerToken"));
-        services.AddSingleton(sp => sp.GetRequiredService<IOptions<BearerTokenSettings>>().Value);
+        services.AddOptions<ExternalServicesSettings>()
+            .Bind(configuration.GetSection(ExternalServicesSettings.SectionName))
+            .ValidateOnStart();
 
-        services.Configure<NotificationServiceSettings>(configuration.GetSection("NotificationService"));
+        services.AddOptions<NotificationServiceSettings>()
+            .Bind(configuration.GetSection(ExternalServicesSettings.NotificationSectionPath))
+            .Validate(settings => string.IsNullOrWhiteSpace(settings.BaseUrl)
+                || Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out _),
+                "ExternalServices:Notification:BaseUrl must be a valid absolute URL.")
+            .ValidateOnStart();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<NotificationServiceSettings>>().Value);
+
+        services.AddOptions<SdmxServiceSettings>()
+            .Bind(configuration.GetSection(ExternalServicesSettings.SdmxSectionPath))
+            .Validate(settings => !string.IsNullOrWhiteSpace(settings.BaseUrl)
+                && Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out _),
+                "ExternalServices:Sdmx:BaseUrl must be configured with a valid absolute URL.")
+            .ValidateOnStart();
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<SdmxServiceSettings>>().Value);
+
+        services.AddOptions<DtfDailyOutboundServiceSettings>()
+            .Bind(configuration.GetSection(ExternalServicesSettings.DtfDailyOutboundSectionPath))
+            .Validate(settings => !string.IsNullOrWhiteSpace(settings.BaseUrl)
+                && Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out _),
+                "ExternalServices:DtfDailyOutbound:BaseUrl must be configured with a valid absolute URL.")
+            .ValidateOnStart();
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<DtfDailyOutboundServiceSettings>>().Value);
 
         services.AddSingleton<IFlowContextAccessor, FlowContextAccessor>();
         services.AddSingleton<IFlowIdProvider, FlowIdProvider>();
@@ -87,17 +109,25 @@ public static class InfrastructureServiceCollectionExtensions
             };
         });
 
-        services.AddHttpClient<ISdmxClient, BanRepSdmxClient>(http =>
+        services.AddHttpClient<ISdmxClient, BanRepSdmxClient>((sp, http) =>
             {
-                http.BaseAddress = new Uri("https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/");
-                http.Timeout = TimeSpan.FromSeconds(30);
+                var settings = sp.GetRequiredService<SdmxServiceSettings>();
+                http.BaseAddress = new Uri(settings.BaseUrl, UriKind.Absolute);
+                http.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds ?? 30);
                 http.DefaultRequestHeaders.UserAgent.ParseAdd("BTG-DTF-Weekly-POC/.NET8");
                 http.DefaultRequestHeaders.Accept.ParseAdd("application/xml");
             })
             .AddHttpMessageHandler<HttpLoggingHandler>()
             .AddHttpMessageHandler<FlowIdDelegatingHandler>();
 
-        services.AddHttpClient<IDtfDailyOutboundClient, DtfDailyOutboundClient>()
+        services.AddHttpClient<IDtfDailyOutboundClient, DtfDailyOutboundClient>((sp, http) =>
+            {
+                var settings = sp.GetRequiredService<DtfDailyOutboundServiceSettings>();
+                if (settings.TimeoutSeconds.HasValue)
+                {
+                    http.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds.Value);
+                }
+            })
             .AddHttpMessageHandler<HttpLoggingHandler>()
             .AddHttpMessageHandler<FlowIdDelegatingHandler>()
             .AddHttpMessageHandler<BearerTokenHandler>();
@@ -110,6 +140,11 @@ public static class InfrastructureServiceCollectionExtensions
                 if (Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var baseUri))
                 {
                     http.BaseAddress = baseUri;
+                }
+
+                if (settings.TimeoutSeconds.HasValue)
+                {
+                    http.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds.Value);
                 }
             })
             .AddHttpMessageHandler<HttpLoggingHandler>()

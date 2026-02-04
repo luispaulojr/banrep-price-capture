@@ -11,8 +11,15 @@ Em .NET, variáveis podem sobrescrever chaves usando o padrão `Section__Key`.
 ### Principais chaves de configuração
 
 - **DtfDailyCapture**
-  - `OutboundUrl`: URL para envio do payload diário.
   - `QueueName`: fila RabbitMQ que dispara a captura diária.
+- **ExternalServices**
+  - `Notification:BaseUrl`: URL base do serviço de notificações (Teams).
+  - `Notification:SystemId`: identificador do sistema emissor.
+  - `Notification:TimeoutSeconds` / `Notification:Retry`: timeout e política de retry.
+  - `Sdmx:BaseUrl`: URL base do SDMX do BanRep.
+  - `Sdmx:TimeoutSeconds`: timeout do SDMX.
+  - `DtfDailyOutbound:BaseUrl`: URL base do endpoint de envio diário.
+  - `DtfDailyOutbound:Authentication:TokenEnvVar`: variável de ambiente com token Bearer.
 - **Database**
   - `DatabaseName`: nome do banco PostgreSQL.
   - `Port`: porta do PostgreSQL (padrão 5432).
@@ -21,8 +28,6 @@ Em .NET, variáveis podem sobrescrever chaves usando o padrão `Section__Key`.
   - `SecretId`: segredo no AWS Secrets Manager (opcional).
   - `HostEnvVar`, `HostReadOnlyEnvVar`, `UsernameEnvVar`, `PasswordEnvVar`:
     nomes das variáveis de ambiente usadas como fallback.
-- **BearerToken**
-  - `TokenEnvVar`: variável de ambiente com o token Bearer do outbound.
 - **RabbitMq**
   - `HostName`, `Port`, `VirtualHost`: endpoint do RabbitMQ.
   - `UserNameEnvVar`, `PasswordEnvVar`: variáveis para credenciais.
@@ -102,7 +107,7 @@ A inserção é idempotente por `(flow_id, data_price)` e usa JSONB para o paylo
 ### Passo a passo
 
 1. Configure as variáveis de ambiente do banco, RabbitMQ e token Bearer.
-2. Atualize `DtfDailyCapture:OutboundUrl` para o destino de envio do payload.
+2. Atualize `ExternalServices:DtfDailyOutbound:BaseUrl` para o destino de envio do payload.
 3. Execute o serviço:
 
 ```bash
