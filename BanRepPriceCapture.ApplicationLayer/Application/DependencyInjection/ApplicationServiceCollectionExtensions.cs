@@ -11,6 +11,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<DtfDailyJob>();
         services.AddScoped<DtfWeeklyJob>();
         services.AddScoped<DtfDailyCaptureWorkflow>();
+        services.AddScoped<DtfSeriesWorkflow>();
 
         return services;
     }

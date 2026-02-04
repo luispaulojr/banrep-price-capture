@@ -29,5 +29,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseMiddleware<FlowIdMiddleware>();
 app.MapDtfEndpoints();
+app.MapHealthChecks("/health");
 
 app.Run();
