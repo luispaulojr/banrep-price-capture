@@ -1,7 +1,7 @@
 using System.Net.Http.Headers;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Http;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Http;
 
 public sealed class BearerTokenHandler(DtfDailyOutboundServiceSettings settings) : DelegatingHandler
 {

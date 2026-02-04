@@ -1,4 +1,4 @@
-using BanRepPriceCapture.ApplicationLayer.Interfaces;
+using BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace BanRepPriceCapture.ServiceLayer.Presentation.HealthChecks;
@@ -12,7 +12,7 @@ public sealed class SdmxHealthCheck(ISdmxClient sdmxClient) : IHealthCheck
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            timeout.CancelAfter(TimeSpan.FromSeconds(10d));
 
             var referenceDate = DateOnly.FromDateTime(DateTime.UtcNow);
             await sdmxClient.GetDtfDailyAsync(referenceDate, referenceDate, timeout.Token);

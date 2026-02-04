@@ -1,4 +1,4 @@
-namespace BanRepPriceCapture.InfrastructureLayer.Resilience;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 
 public interface IRetryPolicyProvider
 {

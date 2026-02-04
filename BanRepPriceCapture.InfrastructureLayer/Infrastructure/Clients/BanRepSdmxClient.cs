@@ -2,9 +2,9 @@
 using System.Net;
 using System.Xml.Linq;
 using BanRepPriceCapture.ApplicationLayer.Exceptions;
-using BanRepPriceCapture.ApplicationLayer.Interfaces;
-using BanRepPriceCapture.ApplicationLayer.Models;
-using BanRepPriceCapture.InfrastructureLayer.Resilience;
+using BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
+using BanRepPriceCapture.ApplicationLayer.Application.Models;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
 
 namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
 

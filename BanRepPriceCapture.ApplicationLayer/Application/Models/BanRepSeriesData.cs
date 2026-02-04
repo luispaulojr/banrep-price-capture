@@ -1,4 +1,4 @@
-﻿namespace BanRepPriceCapture.ApplicationLayer.Models;
+﻿namespace BanRepPriceCapture.ApplicationLayer.Application.Models;
 
 public sealed class BanRepSeriesData
 {

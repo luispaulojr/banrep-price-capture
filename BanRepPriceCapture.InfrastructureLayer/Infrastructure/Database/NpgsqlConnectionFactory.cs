@@ -1,7 +1,7 @@
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using Npgsql;
 
-namespace BanRepPriceCapture.InfrastructureLayer.Database;
+namespace BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database;
 
 public sealed class NpgsqlConnectionFactory(
     DatabaseSettings settings,

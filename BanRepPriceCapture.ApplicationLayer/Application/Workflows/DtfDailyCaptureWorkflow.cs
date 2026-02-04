@@ -1,11 +1,11 @@
-using BanRepPriceCapture.ApplicationLayer.Interfaces;
-using BanRepPriceCapture.ApplicationLayer.Notifications;
-using BanRepPriceCapture.ApplicationLayer.Models;
-using BanRepPriceCapture.DomainLayer.Models;
+using BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
+using BanRepPriceCapture.ApplicationLayer.Application.Notifications;
+using BanRepPriceCapture.ApplicationLayer.Application.Models;
+using BanRepPriceCapture.DomainLayer.Domain.Models;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
 
-namespace BanRepPriceCapture.ApplicationLayer.Workflows;
+namespace BanRepPriceCapture.ApplicationLayer.Application.Workflows;
 
 public sealed class DtfDailyCaptureWorkflow(
     ISdmxClient client,

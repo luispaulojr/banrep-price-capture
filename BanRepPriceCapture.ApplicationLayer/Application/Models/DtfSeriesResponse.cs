@@ -1,4 +1,4 @@
-namespace BanRepPriceCapture.ApplicationLayer.Models;
+namespace BanRepPriceCapture.ApplicationLayer.Application.Models;
 
 public sealed record DtfSeriesResponse(
     string Series,

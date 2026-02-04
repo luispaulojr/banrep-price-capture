@@ -1,4 +1,6 @@
-using BanRepPriceCapture.InfrastructureLayer.DependencyInjection;
+using BanRepPriceCapture.ApplicationLayer.Application.DependencyInjection;
+using BanRepPriceCapture.DomainLayer.Domain.DependencyInjection;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.DependencyInjection;
 using BanRepPriceCapture.InfrastructureLayer.Logging;
 using BanRepPriceCapture.ServiceLayer.Presentation.HealthChecks;
 using BanRepPriceCapture.ServiceLayer.Presentation.Middleware;
