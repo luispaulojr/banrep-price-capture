@@ -74,6 +74,9 @@ public sealed class DtfDailyRabbitConsumer(
         flowContext.SetFlowId(flowId);
         var body = Encoding.UTF8.GetString(args.Body.ToArray());
 
+        using var scope = scopeFactory.CreateScope();
+        var workflow = scope.ServiceProvider.GetRequiredService<DtfDailyCaptureWorkflow>();
+
         try
         {
             logger.LogInformation(
@@ -81,12 +84,10 @@ public sealed class DtfDailyRabbitConsumer(
                 description: "Mensagem recebida.",
                 message: $"delivery={args.DeliveryTag}");
 
-            using var scope = scopeFactory.CreateScope();
-            var workflow = scope.ServiceProvider.GetRequiredService<DtfDailyCaptureWorkflow>();
-
             await workflow.ProcessAsync(_stoppingToken);
 
             _channel.BasicAck(args.DeliveryTag, multiple: false);
+
             logger.LogInformation(
                 method: "DtfDailyRabbitConsumer.HandleMessageAsync",
                 description: "Mensagem processada com sucesso.",
@@ -99,9 +100,19 @@ public sealed class DtfDailyRabbitConsumer(
                 description: "Falha ao processar mensagem.",
                 message: $"payload={body}",
                 exception: ex);
-            using var scope = scopeFactory.CreateScope();
-            var workflow = scope.ServiceProvider.GetRequiredService<DtfDailyCaptureWorkflow>();
-            workflow.NotifyCritical(ex);
+
+            try
+            {
+                workflow.NotifyCritical(ex);
+            }
+            catch (Exception notifyEx)
+            {
+                logger.LogError(
+                    method: "DtfDailyRabbitConsumer.HandleMessageAsync",
+                    description: "Falha ao notificar erro crítico.",
+                    exception: notifyEx);
+            }
+
             _channel.BasicNack(args.DeliveryTag, multiple: false, requeue: true);
         }
     }
