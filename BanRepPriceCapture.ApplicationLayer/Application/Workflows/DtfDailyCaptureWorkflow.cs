@@ -15,6 +15,7 @@ public sealed class DtfDailyCaptureWorkflow(
     IDtfDailyCsvReader csvReader,
     IProcessingStateRepository stateRepository,
     IDtfDailyPayloadSender sender,
+    IArtifactStorageService artifactStorageService,
     IStructuredLogger logger,
     IFlowContextAccessor flowContext,
     INotificationService notificationService)
@@ -78,6 +79,7 @@ public sealed class DtfDailyCaptureWorkflow(
         bool usePersistedPayload,
         CancellationToken ct)
     {
+        var csvPath = BuildCsvPath(flowId, captureDate);
         if (allowSkipCompleted)
         {
             var lastState = await stateRepository.GetLastStatusByCaptureDate(captureDate, ct);
@@ -101,7 +103,6 @@ public sealed class DtfDailyCaptureWorkflow(
 
             if (usePersistedPayload)
             {
-                var csvPath = BuildCsvPath(flowId, captureDate);
                 if (File.Exists(csvPath))
                 {
                     payload = await ReadPayloadsFromCsvAsync(csvPath, ct);
@@ -117,13 +118,13 @@ public sealed class DtfDailyCaptureWorkflow(
                     }
                     else
                     {
-                        payload = await FetchFromClientAsync(flowId, captureDate, ct);
+                        payload = await FetchFromClientAsync(flowId, captureDate, csvPath, ct);
                     }
                 }
             }
             else
             {
-                payload = await FetchFromClientAsync(flowId, captureDate, ct);
+                payload = await FetchFromClientAsync(flowId, captureDate, csvPath, ct);
             }
 
             if (payload.Count == 0)
@@ -151,6 +152,8 @@ public sealed class DtfDailyCaptureWorkflow(
                     message: $"registros={payload.Count} flowId={flowId}");
             }
 
+            await TryUploadCsvAsync(flowId, captureDate, csvPath, ct);
+
             await stateRepository.UpdateStatus(flowId, ProcessingStatus.Persisted, null, ct);
 
             await sender.SendAsync(payload, ct);
@@ -171,10 +174,10 @@ public sealed class DtfDailyCaptureWorkflow(
     private async Task<IReadOnlyList<DtfDailyPricePayload>> FetchFromClientAsync(
         Guid flowId,
         DateOnly captureDate,
+        string csvPath,
         CancellationToken ct)
     {
         var payloads = new List<DtfDailyPricePayload>();
-        var csvPath = BuildCsvPath(flowId, captureDate);
 
         var observations = TapObservationsAsync(
             client.StreamDtfDailyAsync(ct: ct),
@@ -189,6 +192,35 @@ public sealed class DtfDailyCaptureWorkflow(
             message: $"arquivo={csvPath}");
 
         return payloads;
+    }
+
+    private async Task TryUploadCsvAsync(
+        Guid flowId,
+        DateOnly captureDate,
+        string csvPath,
+        CancellationToken ct)
+    {
+        if (!File.Exists(csvPath))
+        {
+            logger.LogWarning(
+                method: "DtfDailyCaptureWorkflow.TryUploadCsvAsync",
+                description: "Arquivo CSV nao encontrado para upload.",
+                message: $"flowId={flowId} arquivo={csvPath}");
+            return;
+        }
+
+        try
+        {
+            await artifactStorageService.UploadDtfDailyCsvAsync(flowId, captureDate, csvPath, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                method: "DtfDailyCaptureWorkflow.TryUploadCsvAsync",
+                description: "Falha ao enviar CSV para armazenamento externo.",
+                message: $"flowId={flowId} arquivo={csvPath}",
+                exception: ex);
+        }
     }
 
     private async IAsyncEnumerable<BanRepSeriesData> TapObservationsAsync(
