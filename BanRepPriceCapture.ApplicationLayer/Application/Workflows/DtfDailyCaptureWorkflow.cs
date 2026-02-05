@@ -25,46 +25,124 @@ public sealed class DtfDailyCaptureWorkflow(
             method: "DtfDailyCaptureWorkflow.ProcessAsync",
             description: "Iniciando captura diaria DTF.");
 
-        await stateRepository.CreateStateIfNotExists(captureDate, flowId, ct);
-        var state = await stateRepository.GetByFlowId(flowId, ct);
-        if (state is not null && state.Status == ProcessingStatus.Sent)
+        await ExecuteAsync(
+            flowId,
+            captureDate,
+            allowSkipCompleted: true,
+            usePersistedPayload: false,
+            ct);
+    }
+
+    public async Task ReprocessAsync(DateOnly? captureDate, Guid? flowId, CancellationToken ct)
+    {
+        if (captureDate is null && flowId is null)
         {
-            logger.LogInformation(
-                method: "DtfDailyCaptureWorkflow.ProcessAsync",
-                description: "Execucao ja enviada, ignorando processamento.",
-                message: $"flowId={flowId}");
-            return;
+            throw new ArgumentException("CaptureDate ou FlowId devem ser informados.");
         }
 
+        ProcessingState? state = null;
+        if (flowId is not null)
+        {
+            state = await stateRepository.GetByFlowId(flowId.Value, ct);
+        }
+
+        if (state is null && captureDate is not null)
+        {
+            state = await stateRepository.GetLastStatusByCaptureDate(captureDate.Value, ct);
+        }
+
+        var resolvedFlowId = flowId ?? state?.FlowId ?? Guid.NewGuid();
+        var resolvedCaptureDate = captureDate
+            ?? state?.CaptureDate
+            ?? flowContext.CaptureDate
+            ?? throw new InvalidOperationException("CaptureDate nao configurado no contexto.");
+
+        flowContext.SetFlowId(resolvedFlowId);
+        flowContext.SetCaptureDate(resolvedCaptureDate);
+
+        await ExecuteAsync(
+            resolvedFlowId,
+            resolvedCaptureDate,
+            allowSkipCompleted: false,
+            usePersistedPayload: true,
+            ct);
+    }
+
+    private async Task ExecuteAsync(
+        Guid flowId,
+        DateOnly captureDate,
+        bool allowSkipCompleted,
+        bool usePersistedPayload,
+        CancellationToken ct)
+    {
+        if (allowSkipCompleted)
+        {
+            var lastState = await stateRepository.GetLastStatusByCaptureDate(captureDate, ct);
+            if (lastState is not null && IsCompletedState(lastState))
+            {
+                logger.LogInformation(
+                    method: "DtfDailyCaptureWorkflow.ProcessAsync",
+                    description: "Execucao ja enviada, ignorando processamento.",
+                    message: $"flowId={lastState.FlowId} captureDate={captureDate:yyyy-MM-dd}");
+                return;
+            }
+        }
+
+        await stateRepository.CreateStateIfNotExists(captureDate, flowId, ct);
         await stateRepository.UpdateStatus(flowId, ProcessingStatus.Processing, null, ct);
 
         try
         {
-            var dailyData = await client.GetDtfDailyAsync(ct: ct);
-            var payload = dailyData
-                .Select(item => new DtfDailyPricePayload(
-                    CodAtivo: 123456,
-                    Data: item.Date.ToString("yyyy-MM-dd"),
-                    CodPraca: "RBLG",
-                    CodFeeder: 8,
-                    CodCampo: 7,
-                    Preco: item.Value,
-                    FatorAjuste: 1.0m,
-                    Previsao: false,
-                    IsRebook: false))
-                .ToList();
+            IReadOnlyList<DtfDailyPricePayload> payload;
+            var reusedPayload = false;
 
-            var captureTime = DateTime.UtcNow;
-            foreach (var entry in payload)
+            if (usePersistedPayload)
             {
-                var dataPrice = DateOnly.ParseExact(entry.Data, "yyyy-MM-dd");
-                await repository.InsertAsync(flowId, captureTime, dataPrice, entry, ct);
+                var storedPayload = await repository.GetPayloadsByFlowId(flowId, ct);
+                if (storedPayload.Count > 0)
+                {
+                    payload = storedPayload;
+                    reusedPayload = true;
+                }
+                else
+                {
+                    payload = await FetchFromClientAsync(ct);
+                }
+            }
+            else
+            {
+                payload = await FetchFromClientAsync(ct);
             }
 
-            logger.LogInformation(
-                method: "DtfDailyCaptureWorkflow.ProcessAsync",
-                description: "Persistencia concluida.",
-                message: $"registros={payload.Count}");
+            if (payload.Count == 0)
+            {
+                logger.LogInformation(
+                    method: "DtfDailyCaptureWorkflow.ProcessAsync",
+                    description: "Nenhum dado encontrado para processamento.",
+                    message: $"flowId={flowId} captureDate={captureDate:yyyy-MM-dd}");
+            }
+
+            if (!reusedPayload)
+            {
+                var captureTime = DateTime.UtcNow;
+                foreach (var entry in payload)
+                {
+                    var dataPrice = DateOnly.ParseExact(entry.Data, "yyyy-MM-dd");
+                    await repository.InsertAsync(flowId, captureTime, dataPrice, entry, ct);
+                }
+
+                logger.LogInformation(
+                    method: "DtfDailyCaptureWorkflow.ProcessAsync",
+                    description: "Persistencia concluida.",
+                    message: $"registros={payload.Count}");
+            }
+            else
+            {
+                logger.LogInformation(
+                    method: "DtfDailyCaptureWorkflow.ProcessAsync",
+                    description: "Reprocessamento usando dados persistidos.",
+                    message: $"registros={payload.Count} flowId={flowId}");
+            }
 
             await stateRepository.UpdateStatus(flowId, ProcessingStatus.Persisted, null, ct);
 
@@ -78,9 +156,32 @@ public sealed class DtfDailyCaptureWorkflow(
         }
         catch (Exception ex)
         {
-            await stateRepository.UpdateStatus(flowId, ProcessingStatus.Failed, ex.Message, ct);
+            await stateRepository.UpdateStatus(flowId, ProcessingStatus.Failed, ex.ToString(), ct);
             throw;
         }
+    }
+
+    private async Task<IReadOnlyList<DtfDailyPricePayload>> FetchFromClientAsync(CancellationToken ct)
+    {
+        var dailyData = await client.GetDtfDailyAsync(ct: ct);
+        return dailyData
+            .Select(item => new DtfDailyPricePayload(
+                CodAtivo: 123456,
+                Data: item.Date.ToString("yyyy-MM-dd"),
+                CodPraca: "RBLG",
+                CodFeeder: 8,
+                CodCampo: 7,
+                Preco: item.Value,
+                FatorAjuste: 1.0m,
+                Previsao: false,
+                IsRebook: false))
+            .ToList();
+    }
+
+    private static bool IsCompletedState(ProcessingState state)
+    {
+        return state.Status == ProcessingStatus.Sent
+            || (state.Status == ProcessingStatus.Persisted && state.DownstreamSendId is not null);
     }
 
     public void NotifyCritical(Exception exception)
