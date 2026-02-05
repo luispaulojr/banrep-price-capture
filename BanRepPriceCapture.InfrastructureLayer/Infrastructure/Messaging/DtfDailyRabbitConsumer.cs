@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
@@ -27,10 +28,13 @@ public sealed class DtfDailyRabbitConsumer(
     private IConnection? _connection;
     private IModel? _channel;
     private CancellationToken _stoppingToken;
-    private readonly ConcurrentDictionary<Guid, int> _requeueAttempts = new();
     private readonly ConcurrentDictionary<Guid, bool> _partialRetryNotified = new();
     private readonly ConcurrentDictionary<Guid, bool> _failureNotified = new();
     private readonly ConcurrentDictionary<Guid, bool> _requeueThresholdNotified = new();
+    private readonly ConcurrentDictionary<Guid, bool> _retryLimitNotified = new();
+    private const string RetryCountHeader = "x-retry-count";
+    private const string DeliveryCountHeader = "x-delivery-count";
+    private const string FlowIdHeader = "FlowId";
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -112,9 +116,21 @@ public sealed class DtfDailyRabbitConsumer(
 
             try
             {
+                var currentRetryCount = GetRetryCount(args);
+                var nextRetryCount = currentRetryCount + 1;
+
                 NotifyFailureOnce(flowId, ex);
-                NotifyPartialRetry(flowId);
-                NotifyRequeueThreshold(flowId);
+                NotifyPartialRetry(flowId, nextRetryCount);
+                NotifyRequeueThreshold(flowId, nextRetryCount);
+
+                if (nextRetryCount > settings.MaxRetryAttempts)
+                {
+                    HandleRetryLimitExceeded(args, flowId, nextRetryCount);
+                }
+                else
+                {
+                    RepublishForRetry(args, flowId, nextRetryCount);
+                }
             }
             catch (Exception notifyEx)
             {
@@ -122,9 +138,11 @@ public sealed class DtfDailyRabbitConsumer(
                     method: "DtfDailyRabbitConsumer.HandleMessageAsync",
                     description: "Falha ao notificar erro crítico.",
                     exception: notifyEx);
+                _channel.BasicNack(args.DeliveryTag, multiple: false, requeue: true);
+                return;
             }
 
-            _channel.BasicNack(args.DeliveryTag, multiple: false, requeue: true);
+            _channel.BasicAck(args.DeliveryTag, multiple: false);
         }
     }
 
@@ -146,9 +164,8 @@ public sealed class DtfDailyRabbitConsumer(
         }, ex);
     }
 
-    private void NotifyPartialRetry(Guid flowId)
+    private void NotifyPartialRetry(Guid flowId, int attempt)
     {
-        var attempt = _requeueAttempts.AddOrUpdate(flowId, 1, (_, current) => current + 1);
         if (attempt > 1 || !_partialRetryNotified.TryAdd(flowId, true))
         {
             return;
@@ -165,9 +182,8 @@ public sealed class DtfDailyRabbitConsumer(
         });
     }
 
-    private void NotifyRequeueThreshold(Guid flowId)
+    private void NotifyRequeueThreshold(Guid flowId, int attempt)
     {
-        var attempt = _requeueAttempts.GetOrAdd(flowId, 1);
         if (attempt < settings.RequeueNotificationThreshold)
         {
             return;
@@ -189,12 +205,171 @@ public sealed class DtfDailyRabbitConsumer(
         });
     }
 
+    private int GetRetryCount(BasicDeliverEventArgs args)
+    {
+        var headers = args.BasicProperties?.Headers;
+        var headerRetry = TryGetHeaderInt(headers, RetryCountHeader);
+        if (headerRetry is not null)
+        {
+            return Math.Max(0, headerRetry.Value);
+        }
+
+        var deliveryCount = TryGetHeaderInt(headers, DeliveryCountHeader);
+        if (deliveryCount is not null)
+        {
+            return Math.Max(0, deliveryCount.Value - 1);
+        }
+
+        return 0;
+    }
+
+    private static int? TryGetHeaderInt(IDictionary<string, object>? headers, string key)
+    {
+        if (headers is null || !headers.TryGetValue(key, out var value) || value is null)
+        {
+            return null;
+        }
+
+        return value switch
+        {
+            byte[] bytes => int.TryParse(Encoding.UTF8.GetString(bytes), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : null,
+            string text => int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : null,
+            sbyte or byte or short or ushort or int or uint or long or ulong => Convert.ToInt32(value, CultureInfo.InvariantCulture),
+            _ => null
+        };
+    }
+
+    private void RepublishForRetry(BasicDeliverEventArgs args, Guid flowId, int retryCount)
+    {
+        if (_channel is null)
+        {
+            return;
+        }
+
+        var properties = _channel.CreateBasicProperties();
+        var source = args.BasicProperties;
+        if (source is not null)
+        {
+            properties.AppId = source.AppId;
+            properties.ClusterId = source.ClusterId;
+            properties.ContentEncoding = source.ContentEncoding;
+            properties.ContentType = source.ContentType;
+            properties.CorrelationId = source.CorrelationId;
+            properties.DeliveryMode = source.DeliveryMode;
+            properties.Expiration = source.Expiration;
+            properties.MessageId = source.MessageId;
+            properties.Priority = source.Priority;
+            properties.ReplyTo = source.ReplyTo;
+            properties.Type = source.Type;
+            properties.UserId = source.UserId;
+            properties.Timestamp = source.Timestamp;
+            properties.Headers = source.Headers is null
+                ? new Dictionary<string, object>()
+                : new Dictionary<string, object>(source.Headers);
+        }
+        else
+        {
+            properties.Headers = new Dictionary<string, object>();
+        }
+
+        properties.MessageId ??= flowId.ToString();
+        properties.Headers[RetryCountHeader] = retryCount;
+        properties.Headers[FlowIdHeader] = flowId.ToString();
+
+        _channel.BasicPublish(
+            exchange: string.Empty,
+            routingKey: settings.QueueName,
+            basicProperties: properties,
+            body: args.Body);
+    }
+
+    private void HandleRetryLimitExceeded(BasicDeliverEventArgs args, Guid flowId, int retryCount)
+    {
+        if (_channel is null)
+        {
+            return;
+        }
+
+        try
+        {
+            NotifyRetryLimitExceeded(flowId, retryCount);
+        }
+        catch (Exception notifyEx)
+        {
+            logger.LogError(
+                method: "DtfDailyRabbitConsumer.HandleRetryLimitExceeded",
+                description: "Falha ao notificar limite de requeue.",
+                exception: notifyEx);
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.DeadLetterQueueName))
+        {
+            var properties = _channel.CreateBasicProperties();
+            var source = args.BasicProperties;
+            if (source is not null)
+            {
+                properties.AppId = source.AppId;
+                properties.ClusterId = source.ClusterId;
+                properties.ContentEncoding = source.ContentEncoding;
+                properties.ContentType = source.ContentType;
+                properties.CorrelationId = source.CorrelationId;
+                properties.DeliveryMode = source.DeliveryMode;
+                properties.Expiration = source.Expiration;
+                properties.MessageId = source.MessageId;
+                properties.Priority = source.Priority;
+                properties.ReplyTo = source.ReplyTo;
+                properties.Type = source.Type;
+                properties.UserId = source.UserId;
+                properties.Timestamp = source.Timestamp;
+                properties.Headers = source.Headers is null
+                    ? new Dictionary<string, object>()
+                    : new Dictionary<string, object>(source.Headers);
+            }
+            else
+            {
+                properties.Headers = new Dictionary<string, object>();
+            }
+
+            properties.MessageId ??= flowId.ToString();
+            properties.Headers[RetryCountHeader] = retryCount;
+            properties.Headers[FlowIdHeader] = flowId.ToString();
+
+            _channel.BasicPublish(
+                exchange: string.Empty,
+                routingKey: settings.DeadLetterQueueName,
+                basicProperties: properties,
+                body: args.Body);
+        }
+    }
+
+    private void NotifyRetryLimitExceeded(Guid flowId, int attempt)
+    {
+        if (!_retryLimitNotified.TryAdd(flowId, true))
+        {
+            return;
+        }
+
+        notificationService.NotifyError(new NotificationPayload
+        {
+            Title = "Limite de reprocessamento excedido DTF Daily",
+            Description = $"Tentativas de reprocessamento excederam o limite configurado. Tentativa={attempt}.",
+            Feature = "DTF Daily Capture",
+            Source = "BanRepPriceCapture",
+            CorrelationId = flowId.ToString(),
+            TemplateName = "dtf-daily-retry-limit-exceeded"
+        });
+    }
+
     private void ClearNotificationState(Guid flowId)
     {
-        _requeueAttempts.TryRemove(flowId, out _);
         _partialRetryNotified.TryRemove(flowId, out _);
         _failureNotified.TryRemove(flowId, out _);
         _requeueThresholdNotified.TryRemove(flowId, out _);
+        _retryLimitNotified.TryRemove(flowId, out _);
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)

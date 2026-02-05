@@ -10,4 +10,6 @@ public sealed record DtfDailyCaptureSettings : IDtfDailyCaptureSettings
     public int PersistenceBatchSize { get; init; } = 200;
     public int PersistenceParallelism { get; init; } = 4;
     public int RequeueNotificationThreshold { get; init; } = 3;
+    public int MaxRetryAttempts { get; init; } = 5;
+    public string DeadLetterQueueName { get; init; } = string.Empty;
 }
