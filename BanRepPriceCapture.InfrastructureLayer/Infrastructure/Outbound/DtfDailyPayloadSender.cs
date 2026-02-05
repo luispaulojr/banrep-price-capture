@@ -9,12 +9,17 @@ public sealed class DtfDailyPayloadSender(
     IDtfDailyOutboundClient outboundClient,
     IStructuredLogger logger) : IDtfDailyPayloadSender
 {
-    public async Task SendAsync(IReadOnlyCollection<DtfDailyPricePayload> payload, CancellationToken ct)
+    public async Task<Guid> SendAsync(IReadOnlyCollection<DtfDailyPricePayload> payload, CancellationToken ct)
     {
         logger.LogInformation(
             method: "DtfDailyPayloadSender.SendAsync",
             description: "Enviando payload diario.",
             message: $"count={payload.Count}");
-        await outboundClient.SendAsync(payload, ct);
+        var downstreamSendId = await outboundClient.SendAsync(payload, ct);
+        logger.LogInformation(
+            method: "DtfDailyPayloadSender.SendAsync",
+            description: "Envio concluido.",
+            message: $"downstreamSendId={downstreamSendId}");
+        return downstreamSendId;
     }
 }

@@ -163,13 +163,31 @@ public sealed class DtfDailyCaptureWorkflow(
 
             await stateRepository.UpdateStatus(flowId, ProcessingStatus.Persisted, null, ct);
 
-            await sender.SendAsync(payload, ct);
+            var currentState = await stateRepository.GetByFlowId(flowId, ct);
+            if (currentState?.DownstreamSendId is not null)
+            {
+                logger.LogInformation(
+                    method: "DtfDailyCaptureWorkflow.ProcessAsync",
+                    description: "Envio ja registrado, ignorando novo envio.",
+                    message: $"flowId={flowId} downstreamSendId={currentState.DownstreamSendId}");
 
-            await stateRepository.UpdateStatus(flowId, ProcessingStatus.Sent, null, ct);
+                if (currentState.Status != ProcessingStatus.Sent)
+                {
+                    await stateRepository.UpdateStatus(flowId, ProcessingStatus.Sent, null, ct);
+                }
+
+                NotifySuccess(flowId, captureDate, payload.Count, reusedPayload);
+                return;
+            }
+
+            var downstreamSendId = await sender.SendAsync(payload, ct);
+
+            await stateRepository.RecordDownstreamSend(flowId, downstreamSendId, ct);
 
             logger.LogInformation(
                 method: "DtfDailyCaptureWorkflow.ProcessAsync",
-                description: "Envio HTTP concluido.");
+                description: "Envio HTTP concluido.",
+                message: $"downstreamSendId={downstreamSendId}");
 
             NotifySuccess(flowId, captureDate, payload.Count, reusedPayload);
         }

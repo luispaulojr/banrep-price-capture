@@ -13,6 +13,7 @@ public sealed class ProcessingStateRepository(
 {
     private readonly string _insertSql = SqlQueries.InsertProcessingState;
     private readonly string _updateStatusSql = SqlQueries.UpdateProcessingStateStatus;
+    private readonly string _recordSendSql = SqlQueries.RecordProcessingStateSend;
     private readonly string _getByFlowIdSql = SqlQueries.GetProcessingStateByFlowId;
     private readonly string _getLastByCaptureDateSql = SqlQueries.GetLastProcessingStateByCaptureDate;
     private readonly string _listFailedOrIncompleteSql = SqlQueries.ListFailedOrIncompleteExecutions;
@@ -60,6 +61,38 @@ public sealed class ProcessingStateRepository(
             };
 
             var command = new CommandDefinition(_updateStatusSql, parameters, transaction, cancellationToken: ct);
+            await connection.ExecuteAsync(command);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public async Task RecordDownstreamSend(Guid flowId, Guid downstreamSendId, CancellationToken ct)
+    {
+        await using var connection = await _connectionFactory.CreateReadWriteAsync(ct);
+        await retryPolicies.ExecuteAsync(
+            token => connection.OpenAsync(token),
+            RetryPolicyKind.DatabaseConnection,
+            "ProcessingStateRepository.RecordDownstreamSend",
+            ct);
+
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        try
+        {
+            var parameters = new
+            {
+                FlowId = flowId,
+                DownstreamSendId = downstreamSendId,
+                Status = ProcessingStatus.Sent.ToString(),
+                ErrorMessage = (string?)null,
+                LastUpdatedAt = DateTime.UtcNow
+            };
+
+            var command = new CommandDefinition(_recordSendSql, parameters, transaction, cancellationToken: ct);
             await connection.ExecuteAsync(command);
             await transaction.CommitAsync(ct);
         }
