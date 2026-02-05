@@ -98,6 +98,11 @@ public sealed class DtfDailyCaptureWorkflow(
 
         try
         {
+            if (usePersistedPayload)
+            {
+                NotifyReprocessingTriggered(flowId, captureDate);
+            }
+
             IReadOnlyList<DtfDailyPricePayload> payload;
             var reusedPayload = false;
 
@@ -133,6 +138,8 @@ public sealed class DtfDailyCaptureWorkflow(
                     method: "DtfDailyCaptureWorkflow.ProcessAsync",
                     description: "Nenhum dado encontrado para processamento.",
                     message: $"flowId={flowId} captureDate={captureDate:yyyy-MM-dd}");
+
+                NotifyDataGap(flowId, captureDate);
             }
 
             if (!reusedPayload)
@@ -163,6 +170,8 @@ public sealed class DtfDailyCaptureWorkflow(
             logger.LogInformation(
                 method: "DtfDailyCaptureWorkflow.ProcessAsync",
                 description: "Envio HTTP concluido.");
+
+            NotifySuccess(flowId, captureDate, payload.Count, reusedPayload);
         }
         catch (Exception ex)
         {
@@ -337,5 +346,44 @@ public sealed class DtfDailyCaptureWorkflow(
             CorrelationId = flowId.ToString(),
             TemplateName = "dtf-daily-critical"
         }, exception);
+    }
+
+    private void NotifySuccess(Guid flowId, DateOnly captureDate, int payloadCount, bool reusedPayload)
+    {
+        notificationService.NotifyInfo(new NotificationPayload
+        {
+            Title = "Execucao concluida DTF Daily",
+            Description = $"Execucao concluida com sucesso. captureDate={captureDate:yyyy-MM-dd} registros={payloadCount} reusedPayload={reusedPayload}.",
+            Feature = "DTF Daily Capture",
+            Source = "BanRepPriceCapture",
+            CorrelationId = flowId.ToString(),
+            TemplateName = "dtf-daily-success"
+        });
+    }
+
+    private void NotifyDataGap(Guid flowId, DateOnly captureDate)
+    {
+        notificationService.NotifyWarn(new NotificationPayload
+        {
+            Title = "Alerta de gap de dados DTF Daily",
+            Description = $"Nenhum dado encontrado para captureDate={captureDate:yyyy-MM-dd}.",
+            Feature = "DTF Daily Capture",
+            Source = "BanRepPriceCapture",
+            CorrelationId = flowId.ToString(),
+            TemplateName = "dtf-daily-data-gap"
+        });
+    }
+
+    private void NotifyReprocessingTriggered(Guid flowId, DateOnly captureDate)
+    {
+        notificationService.NotifyWarn(new NotificationPayload
+        {
+            Title = "Reprocessamento acionado DTF Daily",
+            Description = $"Reprocessamento acionado para captureDate={captureDate:yyyy-MM-dd}.",
+            Feature = "DTF Daily Capture",
+            Source = "BanRepPriceCapture",
+            CorrelationId = flowId.ToString(),
+            TemplateName = "dtf-daily-reprocess-trigger"
+        });
     }
 }

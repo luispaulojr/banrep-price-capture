@@ -29,7 +29,10 @@ public abstract record ExternalServiceSettings
     public ExternalServiceRetrySettings Retry { get; init; } = new();
 }
 
-public sealed record NotificationServiceSettings : ExternalServiceSettings;
+public sealed record NotificationServiceSettings : ExternalServiceSettings
+{
+    public bool Enabled { get; init; } = true;
+}
 
 public sealed record SdmxServiceSettings : ExternalServiceSettings;
 

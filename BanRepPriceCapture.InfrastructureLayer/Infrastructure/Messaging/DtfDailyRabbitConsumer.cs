@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Text;
 using BanRepPriceCapture.ApplicationLayer.Flow;
 using BanRepPriceCapture.ApplicationLayer.Logging;
+using BanRepPriceCapture.ApplicationLayer.Application.Notifications;
 using BanRepPriceCapture.ApplicationLayer.Application.Workflows;
 using BanRepPriceCapture.InfrastructureLayer.Configuration;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Resilience;
@@ -18,12 +20,17 @@ public sealed class DtfDailyRabbitConsumer(
     IConnectionFactory connectionFactory,
     IFlowContextAccessor flowContext,
     IFlowIdProvider flowIdProvider,
+    INotificationService notificationService,
     IRetryPolicyProvider retryPolicies)
     : BackgroundService
 {
     private IConnection? _connection;
     private IModel? _channel;
     private CancellationToken _stoppingToken;
+    private readonly ConcurrentDictionary<Guid, int> _requeueAttempts = new();
+    private readonly ConcurrentDictionary<Guid, bool> _partialRetryNotified = new();
+    private readonly ConcurrentDictionary<Guid, bool> _failureNotified = new();
+    private readonly ConcurrentDictionary<Guid, bool> _requeueThresholdNotified = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -88,6 +95,7 @@ public sealed class DtfDailyRabbitConsumer(
             await workflow.ProcessAsync(_stoppingToken);
 
             _channel.BasicAck(args.DeliveryTag, multiple: false);
+            ClearNotificationState(flowId);
 
             logger.LogInformation(
                 method: "DtfDailyRabbitConsumer.HandleMessageAsync",
@@ -104,7 +112,9 @@ public sealed class DtfDailyRabbitConsumer(
 
             try
             {
-                workflow.NotifyCritical(ex);
+                NotifyFailureOnce(flowId, ex);
+                NotifyPartialRetry(flowId);
+                NotifyRequeueThreshold(flowId);
             }
             catch (Exception notifyEx)
             {
@@ -116,6 +126,75 @@ public sealed class DtfDailyRabbitConsumer(
 
             _channel.BasicNack(args.DeliveryTag, multiple: false, requeue: true);
         }
+    }
+
+    private void NotifyFailureOnce(Guid flowId, Exception ex)
+    {
+        if (!_failureNotified.TryAdd(flowId, true))
+        {
+            return;
+        }
+
+        notificationService.NotifyError(new NotificationPayload
+        {
+            Title = "Falha na execucao DTF Daily",
+            Description = ex.Message,
+            Feature = "DTF Daily Capture",
+            Source = "BanRepPriceCapture",
+            CorrelationId = flowId.ToString(),
+            TemplateName = "dtf-daily-execution-failed"
+        }, ex);
+    }
+
+    private void NotifyPartialRetry(Guid flowId)
+    {
+        var attempt = _requeueAttempts.AddOrUpdate(flowId, 1, (_, current) => current + 1);
+        if (attempt > 1 || !_partialRetryNotified.TryAdd(flowId, true))
+        {
+            return;
+        }
+
+        notificationService.NotifyWarn(new NotificationPayload
+        {
+            Title = "Reprocessamento parcial DTF Daily",
+            Description = $"Reprocessamento parcial detectado. Tentativa={attempt}.",
+            Feature = "DTF Daily Capture",
+            Source = "BanRepPriceCapture",
+            CorrelationId = flowId.ToString(),
+            TemplateName = "dtf-daily-partial-retry"
+        });
+    }
+
+    private void NotifyRequeueThreshold(Guid flowId)
+    {
+        var attempt = _requeueAttempts.GetOrAdd(flowId, 1);
+        if (attempt < settings.RequeueNotificationThreshold)
+        {
+            return;
+        }
+
+        if (!_requeueThresholdNotified.TryAdd(flowId, true))
+        {
+            return;
+        }
+
+        notificationService.NotifyError(new NotificationPayload
+        {
+            Title = "Requeue excedido DTF Daily",
+            Description = $"Tentativas de reprocessamento excederam o limite configurado. Tentativa={attempt}.",
+            Feature = "DTF Daily Capture",
+            Source = "BanRepPriceCapture",
+            CorrelationId = flowId.ToString(),
+            TemplateName = "dtf-daily-requeue-threshold"
+        });
+    }
+
+    private void ClearNotificationState(Guid flowId)
+    {
+        _requeueAttempts.TryRemove(flowId, out _);
+        _partialRetryNotified.TryRemove(flowId, out _);
+        _failureNotified.TryRemove(flowId, out _);
+        _requeueThresholdNotified.TryRemove(flowId, out _);
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)
