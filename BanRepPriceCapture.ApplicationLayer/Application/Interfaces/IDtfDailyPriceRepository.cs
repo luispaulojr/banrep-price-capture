@@ -10,4 +10,5 @@ public interface IDtfDailyPriceRepository
         DateOnly dataPrice,
         DtfDailyPricePayload payload,
         CancellationToken ct);
+    Task<IReadOnlyList<DtfDailyPricePayload>> GetPayloadsByFlowId(Guid flowId, CancellationToken ct);
 }

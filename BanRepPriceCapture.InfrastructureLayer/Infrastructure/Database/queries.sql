@@ -8,6 +8,12 @@ where not exists (
       and data_price = @DataPrice
 );
 
+-- name: GetDtfDailyPricePayloadsByFlowId
+select payload as "Payload"
+from "dtf_daily_prices"
+where flow_id = @FlowId
+order by data_price;
+
 -- name: InsertProcessingState
 insert into "dtf_processing_states" (
     capture_date,
