@@ -10,6 +10,7 @@
     <PackageVersion Include="AWSSDK.SecretsManager" Version="4.0.2.3" />
     <PackageVersion Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.300" />
     <PackageVersion Include="AWSSDK.CloudWatchLogs" Version="4.0.2.3" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.2.3" />
     <PackageVersion Include="Dapper" Version="2.1.38" />
     <PackageVersion Include="Npgsql" Version="8.0.5" />
     <PackageVersion Include="RabbitMQ.Client" Version="6.8.1" />

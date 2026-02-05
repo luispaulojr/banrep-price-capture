@@ -1,4 +1,6 @@
+using Amazon.Extensions.NETCore.Setup;
 using Amazon.SecretsManager;
+using Amazon.S3;
 using BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
 using BanRepPriceCapture.ApplicationLayer.Application.Notifications;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database;
@@ -68,10 +70,19 @@ public static class InfrastructureServiceCollectionExtensions
             .ValidateOnStart();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<DtfDailyOutboundServiceSettings>>().Value);
 
+        services.AddOptions<S3ArtifactStorageSettings>()
+            .Bind(configuration.GetSection(ExternalServicesSettings.S3ArtifactsSectionPath))
+            .Validate(settings => !string.IsNullOrWhiteSpace(settings.BucketName)
+                && !string.IsNullOrWhiteSpace(settings.Environment),
+                "ExternalServices:S3Artifacts:BucketName and Environment must be configured.")
+            .ValidateOnStart();
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<S3ArtifactStorageSettings>>().Value);
+
         services.AddSingleton<IFlowContextAccessor, FlowContextAccessor>();
         services.AddSingleton<IFlowIdProvider, FlowIdProvider>();
 
         services.AddSingleton<IAmazonSecretsManager, AmazonSecretsManagerClient>();
+        services.AddAWSService<IAmazonS3>();
         services.AddSingleton<IDatabaseSecretsProvider, AwsSecretsManagerDatabaseSecretsProvider>();
         services.AddSingleton<IDatabaseConnectionFactory, NpgsqlConnectionFactory>();
         services.AddSingleton<IRetryPolicyProvider, RetryPolicyProvider>();
@@ -160,6 +171,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IProcessingStateRepository, ProcessingStateRepository>();
         services.AddSingleton<IDtfDailyCsvWriter, DtfDailyCsvWriter>();
         services.AddSingleton<IDtfDailyCsvReader, DtfDailyCsvReader>();
+        services.AddSingleton<IArtifactStorageService, S3ArtifactStorageService>();
 
         services.AddSingleton<INotificationService>(sp =>
         {

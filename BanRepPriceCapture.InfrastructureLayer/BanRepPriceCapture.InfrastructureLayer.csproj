@@ -13,6 +13,7 @@
   <ItemGroup>
     <PackageReference Include="AWSSDK.SecretsManager" />
     <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" />
+    <PackageReference Include="AWSSDK.S3" />
     <PackageReference Include="Dapper" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="RabbitMQ.Client" />
