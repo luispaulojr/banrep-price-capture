@@ -178,6 +178,15 @@ public static class InfrastructureServiceCollectionExtensions
             var settings = sp.GetRequiredService<NotificationServiceSettings>();
             var logger = sp.GetRequiredService<IStructuredLogger>();
 
+            if (!settings.Enabled)
+            {
+                logger.LogWarning(
+                    method: "NotificationService.Configuration",
+                    description: "NotificationService desabilitado.",
+                    message: "Using NotificationServiceStub.");
+                return new NotificationServiceStub(logger);
+            }
+
             if (!Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out _))
             {
                 logger.LogWarning(

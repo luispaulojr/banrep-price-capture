@@ -9,4 +9,5 @@ public sealed record DtfDailyCaptureSettings : IDtfDailyCaptureSettings
     public string CsvDirectory { get; init; } = "artifacts/dtf-daily";
     public int PersistenceBatchSize { get; init; } = 200;
     public int PersistenceParallelism { get; init; } = 4;
+    public int RequeueNotificationThreshold { get; init; } = 3;
 }
