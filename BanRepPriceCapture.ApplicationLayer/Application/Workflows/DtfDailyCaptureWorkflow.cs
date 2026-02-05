@@ -10,6 +10,9 @@ namespace BanRepPriceCapture.ApplicationLayer.Application.Workflows;
 public sealed class DtfDailyCaptureWorkflow(
     ISdmxClient client,
     IDtfDailyPriceRepository repository,
+    IDtfDailyCaptureSettings settings,
+    IDtfDailyCsvWriter csvWriter,
+    IDtfDailyCsvReader csvReader,
     IProcessingStateRepository stateRepository,
     IDtfDailyPayloadSender sender,
     IStructuredLogger logger,
@@ -98,20 +101,29 @@ public sealed class DtfDailyCaptureWorkflow(
 
             if (usePersistedPayload)
             {
-                var storedPayload = await repository.GetPayloadsByFlowId(flowId, ct);
-                if (storedPayload.Count > 0)
+                var csvPath = BuildCsvPath(flowId, captureDate);
+                if (File.Exists(csvPath))
                 {
-                    payload = storedPayload;
+                    payload = await ReadPayloadsFromCsvAsync(csvPath, ct);
                     reusedPayload = true;
                 }
                 else
                 {
-                    payload = await FetchFromClientAsync(ct);
+                    var storedPayload = await repository.GetPayloadsByFlowId(flowId, ct);
+                    if (storedPayload.Count > 0)
+                    {
+                        payload = storedPayload;
+                        reusedPayload = true;
+                    }
+                    else
+                    {
+                        payload = await FetchFromClientAsync(flowId, captureDate, ct);
+                    }
                 }
             }
             else
             {
-                payload = await FetchFromClientAsync(ct);
+                payload = await FetchFromClientAsync(flowId, captureDate, ct);
             }
 
             if (payload.Count == 0)
@@ -124,12 +136,7 @@ public sealed class DtfDailyCaptureWorkflow(
 
             if (!reusedPayload)
             {
-                var captureTime = DateTime.UtcNow;
-                foreach (var entry in payload)
-                {
-                    var dataPrice = DateOnly.ParseExact(entry.Data, "yyyy-MM-dd");
-                    await repository.InsertAsync(flowId, captureTime, dataPrice, entry, ct);
-                }
+                await PersistPayloadsAsync(flowId, payload, ct);
 
                 logger.LogInformation(
                     method: "DtfDailyCaptureWorkflow.ProcessAsync",
@@ -161,21 +168,118 @@ public sealed class DtfDailyCaptureWorkflow(
         }
     }
 
-    private async Task<IReadOnlyList<DtfDailyPricePayload>> FetchFromClientAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<DtfDailyPricePayload>> FetchFromClientAsync(
+        Guid flowId,
+        DateOnly captureDate,
+        CancellationToken ct)
     {
-        var dailyData = await client.GetDtfDailyAsync(ct: ct);
-        return dailyData
-            .Select(item => new DtfDailyPricePayload(
-                CodAtivo: 123456,
-                Data: item.Date.ToString("yyyy-MM-dd"),
-                CodPraca: "RBLG",
-                CodFeeder: 8,
-                CodCampo: 7,
-                Preco: item.Value,
-                FatorAjuste: 1.0m,
-                Previsao: false,
-                IsRebook: false))
-            .ToList();
+        var payloads = new List<DtfDailyPricePayload>();
+        var csvPath = BuildCsvPath(flowId, captureDate);
+
+        var observations = TapObservationsAsync(
+            client.StreamDtfDailyAsync(ct: ct),
+            payloads,
+            ct);
+
+        await csvWriter.WriteAsync(observations, csvPath, ct);
+
+        logger.LogInformation(
+            method: "DtfDailyCaptureWorkflow.FetchFromClientAsync",
+            description: "CSV gerado com observacoes SDMX.",
+            message: $"arquivo={csvPath}");
+
+        return payloads;
+    }
+
+    private async IAsyncEnumerable<BanRepSeriesData> TapObservationsAsync(
+        IAsyncEnumerable<BanRepSeriesData> source,
+        ICollection<DtfDailyPricePayload> payloads,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        await foreach (var item in source.WithCancellation(ct))
+        {
+            payloads.Add(CreatePayload(item));
+            yield return item;
+        }
+    }
+
+    private DtfDailyPricePayload CreatePayload(BanRepSeriesData item)
+    {
+        return new DtfDailyPricePayload(
+            CodAtivo: 123456,
+            Data: item.Date.ToString("yyyy-MM-dd"),
+            CodPraca: "RBLG",
+            CodFeeder: 8,
+            CodCampo: 7,
+            Preco: item.Value,
+            FatorAjuste: 1.0m,
+            Previsao: false,
+            IsRebook: false);
+    }
+
+    private async Task<IReadOnlyList<DtfDailyPricePayload>> ReadPayloadsFromCsvAsync(
+        string csvPath,
+        CancellationToken ct)
+    {
+        var payloads = new List<DtfDailyPricePayload>();
+        await foreach (var item in csvReader.ReadAsync(csvPath, ct))
+        {
+            payloads.Add(CreatePayload(item));
+        }
+
+        return payloads;
+    }
+
+    private async Task PersistPayloadsAsync(
+        Guid flowId,
+        IReadOnlyList<DtfDailyPricePayload> payloads,
+        CancellationToken ct)
+    {
+        var captureTime = DateTime.UtcNow;
+        var batchSize = Math.Max(1, settings.PersistenceBatchSize);
+        var parallelism = Math.Max(1, settings.PersistenceParallelism);
+
+        using var semaphore = new SemaphoreSlim(parallelism);
+        var tasks = new List<Task>();
+
+        for (var index = 0; index < payloads.Count; index += batchSize)
+        {
+            var batch = payloads.Skip(index).Take(batchSize).ToArray();
+            await semaphore.WaitAsync(ct);
+            tasks.Add(ProcessBatchAsync(flowId, captureTime, batch, semaphore, ct));
+        }
+
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task ProcessBatchAsync(
+        Guid flowId,
+        DateTime captureTime,
+        IReadOnlyList<DtfDailyPricePayload> batch,
+        SemaphoreSlim semaphore,
+        CancellationToken ct)
+    {
+        try
+        {
+            foreach (var entry in batch)
+            {
+                var dataPrice = DateOnly.ParseExact(entry.Data, "yyyy-MM-dd");
+                await repository.InsertAsync(flowId, captureTime, dataPrice, entry, ct);
+            }
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+
+    private string BuildCsvPath(Guid flowId, DateOnly captureDate)
+    {
+        var fileName = $"{flowId:N}.csv";
+        return Path.Combine(
+            settings.CsvDirectory,
+            captureDate.ToString("yyyyMMdd"),
+            fileName);
     }
 
     private static bool IsCompletedState(ProcessingState state)

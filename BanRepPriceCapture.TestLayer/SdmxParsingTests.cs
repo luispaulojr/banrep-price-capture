@@ -25,6 +25,24 @@ public sealed class SdmxParsingTests
     }
 
     [Fact]
+    public async Task StreamSdmxGenericDataAsync_ParsesDatesAndValues()
+    {
+        using var stream = OpenFixture("SdmxParseSample.xml");
+
+        var result = new List<BanRepSeriesData>();
+        await foreach (var item in BanRepSdmxClient.StreamSdmxGenericDataAsync(stream))
+        {
+            result.Add(item);
+        }
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(new DateOnly(2024, 8, 16), result[0].Date);
+        Assert.Equal(10.751m, result[0].Value);
+        Assert.Equal(new DateOnly(2024, 8, 17), result[1].Date);
+        Assert.Equal(10.752m, result[1].Value);
+    }
+
+    [Fact]
     public void AggregateWeeklyByIsoWeek_ReturnsLastObservationPerWeek()
     {
         var daily = new List<BanRepSeriesData>

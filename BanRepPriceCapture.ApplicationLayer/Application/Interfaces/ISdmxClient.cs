@@ -9,6 +9,11 @@ public interface ISdmxClient
         DateOnly? end = null,
         CancellationToken ct = default);
 
+    IAsyncEnumerable<BanRepSeriesData> StreamDtfDailyAsync(
+        DateOnly? start = null,
+        DateOnly? end = null,
+        CancellationToken ct = default);
+
     Task<List<BanRepSeriesData>> GetDtfWeeklyAsync(
         DateOnly? start = null,
         DateOnly? end = null,

@@ -14,6 +14,7 @@ using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Aws;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Clients;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Database.TypeHandlers;
 using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Messaging;
+using BanRepPriceCapture.InfrastructureLayer.Infrastructure.Csv;
 using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,7 @@ public static class InfrastructureServiceCollectionExtensions
     {
         services.Configure<DtfDailyCaptureSettings>(configuration.GetSection("DtfDailyCapture"));
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<DtfDailyCaptureSettings>>().Value);
+        services.AddSingleton<IDtfDailyCaptureSettings>(sp => sp.GetRequiredService<DtfDailyCaptureSettings>());
 
         services.Configure<RabbitMqSettings>(configuration.GetSection("RabbitMq"));
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<RabbitMqSettings>>().Value);
@@ -156,6 +158,8 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddScoped<IDtfDailyPriceRepository, DtfDailyPriceRepository>();
         services.AddScoped<IProcessingStateRepository, ProcessingStateRepository>();
+        services.AddSingleton<IDtfDailyCsvWriter, DtfDailyCsvWriter>();
+        services.AddSingleton<IDtfDailyCsvReader, DtfDailyCsvReader>();
 
         services.AddSingleton<INotificationService>(sp =>
         {
