@@ -1,5 +1,7 @@
 ﻿using System.Globalization;
 using System.Net;
+using System.Runtime.CompilerServices;
+using System.Xml;
 using System.Xml.Linq;
 using BanRepPriceCapture.ApplicationLayer.Exceptions;
 using BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
@@ -30,66 +32,27 @@ public sealed class BanRepSdmxClient(
         // /rest/data/{AGENCY_ID},{FLOW_ID},{VERSION}/all/ALL/?startPeriod=...&endPeriod=...&dimensionAtObservation=TIME_PERIOD&detail=full
         var url = BuildDtfUrl(start, end);
 
-        return await retryPolicies.ExecuteAsync(async token =>
+        var response = await retryPolicies.ExecuteAsync(
+            token => SendSdmxRequestAsync(url, token),
+            RetryPolicyKind.SdmxHttp,
+            "BanRepSdmxClient.GetDtfDailyAsync",
+            ct);
+
+        using var httpResponse = response;
+        await using var stream = await ValidateAndGetStreamAsync(httpResponse, ct);
+        if (stream is null)
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Accept.ParseAdd("application/xml");
+            return new List<BanRepSeriesData>();
+        }
 
-            HttpResponseMessage resp;
-            try
-            {
-                resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, token);
-            }
-            catch (TaskCanceledException ex) when (!token.IsCancellationRequested)
-            {
-                throw new TimeoutException("Timeout ao chamar o SDMX do BanRep.", ex);
-            }
-            catch (HttpRequestException ex)
-            {
-                throw new HttpRequestException("Falha de rede ao chamar o SDMX do BanRep.", ex);
-            }
-
-            using var response = resp;
-            var mediaType = response.Content.Headers.ContentType?.MediaType;
-
-            if (mediaType is null || !mediaType.Contains("xml", StringComparison.OrdinalIgnoreCase))
-            {
-                var body = await SafeReadBody(response, token);
-                throw new BanRepSdmxException(
-                    $"Resposta inesperada do BanRep. Content-Type={mediaType ?? "<null>"}. Body={(body ?? "<vazio>")}");
-            }
-
-            // O PDF descreve erros HTTP comuns: 400, 404, 500, 503
-            if (response.StatusCode == HttpStatusCode.NotFound)
-            {
-                return new List<BanRepSeriesData>();
-            }
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var body = await SafeReadBody(response, token);
-                var message =
-                    $"Erro do BanRep SDMX. Status={(int)response.StatusCode} {response.ReasonPhrase}. Body={(body ?? "<vazio>")}";
-
-                if (IsTransientStatusCode(response.StatusCode))
-                {
-                    throw new TransientFailureException(message);
-                }
-
-                throw new BanRepSdmxException(message);
-            }
-
-            await using var stream = await response.Content.ReadAsStreamAsync(token);
-
-            // O serviço retorna SDMX-ML (XML). A observação vem como:
-            // <generic:Obs>
-            //   <generic:ObsDimension value="2024-08-16" />
-            //   <generic:ObsValue value="10.751" />
-            // </generic:Obs>
-            //
-            // A documentação explica que TIME_PERIOD é a dimensão do tempo e OBS_VALUE é o valor.
-            return ParseSdmxGenericData(stream);
-        }, RetryPolicyKind.SdmxHttp, "BanRepSdmxClient.GetDtfDailyAsync", ct);
+        // O serviço retorna SDMX-ML (XML). A observação vem como:
+        // <generic:Obs>
+        //   <generic:ObsDimension value="2024-08-16" />
+        //   <generic:ObsValue value="10.751" />
+        // </generic:Obs>
+        //
+        // A documentação explica que TIME_PERIOD é a dimensão do tempo e OBS_VALUE é o valor.
+        return ParseSdmxGenericData(stream);
     }
 
     public async Task<List<BanRepSeriesData>> GetDtfWeeklyAsync(
@@ -100,6 +63,31 @@ public sealed class BanRepSdmxClient(
         var daily = await GetDtfDailyAsync(start, end, ct);
 
         return AggregateWeeklyByIsoWeek(daily);
+    }
+
+    public async IAsyncEnumerable<BanRepSeriesData> StreamDtfDailyAsync(
+        DateOnly? start = null,
+        DateOnly? end = null,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var url = BuildDtfUrl(start, end);
+        var response = await retryPolicies.ExecuteAsync(
+            token => SendSdmxRequestAsync(url, token),
+            RetryPolicyKind.SdmxHttp,
+            "BanRepSdmxClient.StreamDtfDailyAsync",
+            ct);
+
+        await using var httpResponse = response;
+        await using var stream = await ValidateAndGetStreamAsync(httpResponse, ct);
+        if (stream is null)
+        {
+            yield break;
+        }
+
+        await foreach (var item in StreamSdmxGenericDataAsync(stream, ct))
+        {
+            yield return item;
+        }
     }
 
     public static List<BanRepSeriesData> AggregateWeeklyByIsoWeek(IEnumerable<BanRepSeriesData> daily)
@@ -145,6 +133,65 @@ public sealed class BanRepSdmxClient(
             .ToList();
 
         return obs;
+    }
+
+    public static async IAsyncEnumerable<BanRepSeriesData> StreamSdmxGenericDataAsync(
+        Stream xmlStream,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var settings = new XmlReaderSettings
+        {
+            Async = true,
+            IgnoreWhitespace = true
+        };
+
+        using var reader = XmlReader.Create(xmlStream, settings);
+        while (await reader.ReadAsync())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (reader.NodeType != XmlNodeType.Element || reader.LocalName != "Obs")
+            {
+                continue;
+            }
+
+            string? dimValue = null;
+            string? obsValue = null;
+
+            using var obsReader = reader.ReadSubtree();
+            while (await obsReader.ReadAsync())
+            {
+                if (obsReader.NodeType != XmlNodeType.Element)
+                {
+                    continue;
+                }
+
+                if (obsReader.LocalName == "ObsDimension")
+                {
+                    dimValue = obsReader.GetAttribute("value");
+                }
+                else if (obsReader.LocalName == "ObsValue")
+                {
+                    obsValue = obsReader.GetAttribute("value");
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(dimValue) || string.IsNullOrWhiteSpace(obsValue))
+            {
+                continue;
+            }
+
+            if (!TryParseSdmxDate(dimValue, out var date))
+            {
+                continue;
+            }
+
+            if (!TryParseDecimalInvariant(obsValue, out var dec))
+            {
+                continue;
+            }
+
+            yield return new BanRepSeriesData { Date = date, Value = dec };
+        }
     }
     
     private static string BuildDtfUrl(DateOnly? start, DateOnly? end)
@@ -230,5 +277,58 @@ public sealed class BanRepSdmxClient(
             || statusCode == HttpStatusCode.BadGateway
             || statusCode == HttpStatusCode.ServiceUnavailable
             || statusCode == HttpStatusCode.GatewayTimeout;
+    }
+
+    private async Task<HttpResponseMessage> SendSdmxRequestAsync(string url, CancellationToken token)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Accept.ParseAdd("application/xml");
+
+        try
+        {
+            return await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, token);
+        }
+        catch (TaskCanceledException ex) when (!token.IsCancellationRequested)
+        {
+            throw new TimeoutException("Timeout ao chamar o SDMX do BanRep.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new HttpRequestException("Falha de rede ao chamar o SDMX do BanRep.", ex);
+        }
+    }
+
+    private static async Task<Stream?> ValidateAndGetStreamAsync(HttpResponseMessage response, CancellationToken token)
+    {
+        var mediaType = response.Content.Headers.ContentType?.MediaType;
+
+        if (mediaType is null || !mediaType.Contains("xml", StringComparison.OrdinalIgnoreCase))
+        {
+            var body = await SafeReadBody(response, token);
+            throw new BanRepSdmxException(
+                $"Resposta inesperada do BanRep. Content-Type={mediaType ?? "<null>"}. Body={(body ?? "<vazio>")}");
+        }
+
+        // O PDF descreve erros HTTP comuns: 400, 404, 500, 503
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await SafeReadBody(response, token);
+            var message =
+                $"Erro do BanRep SDMX. Status={(int)response.StatusCode} {response.ReasonPhrase}. Body={(body ?? "<vazio>")}";
+
+            if (IsTransientStatusCode(response.StatusCode))
+            {
+                throw new TransientFailureException(message);
+            }
+
+            throw new BanRepSdmxException(message);
+        }
+
+        return await response.Content.ReadAsStreamAsync(token);
     }
 }
