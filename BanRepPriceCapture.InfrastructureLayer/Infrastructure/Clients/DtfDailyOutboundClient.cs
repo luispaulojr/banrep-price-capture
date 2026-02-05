@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using BanRepPriceCapture.DomainLayer.Domain.Models;
@@ -12,10 +13,17 @@ public sealed class DtfDailyOutboundClient(
     IRetryPolicyProvider retryPolicies) : IDtfDailyOutboundClient
 {
     private readonly Uri _outboundUri = new(settings.BaseUrl, UriKind.Absolute);
+    private static readonly string[] SendIdHeaderNames =
+    [
+        "X-Downstream-Send-Id",
+        "X-Send-Id",
+        "X-Request-Id",
+        "X-Correlation-Id"
+    ];
 
-    public async Task SendAsync(IReadOnlyCollection<DtfDailyPricePayload> payload, CancellationToken ct)
+    public async Task<Guid> SendAsync(IReadOnlyCollection<DtfDailyPricePayload> payload, CancellationToken ct)
     {
-        await retryPolicies.ExecuteAsync(async token =>
+        return await retryPolicies.ExecuteAsync(async token =>
         {
             var body = JsonSerializer.Serialize(payload);
             using var content = new StringContent(body, Encoding.UTF8, "application/json");
@@ -31,6 +39,8 @@ public sealed class DtfDailyOutboundClient(
 
                 response.EnsureSuccessStatusCode();
             }
+
+            return ResolveDownstreamSendId(response);
         }, RetryPolicyKind.OutboundHttpPost, "DtfDailyPayloadSender.SendAsync", ct);
     }
 
@@ -42,5 +52,37 @@ public sealed class DtfDailyOutboundClient(
             || statusCode == System.Net.HttpStatusCode.BadGateway
             || statusCode == System.Net.HttpStatusCode.ServiceUnavailable
             || statusCode == System.Net.HttpStatusCode.GatewayTimeout;
+    }
+
+    private static Guid ResolveDownstreamSendId(HttpResponseMessage response)
+    {
+        foreach (var headerName in SendIdHeaderNames)
+        {
+            if (TryGetHeaderValue(response, headerName, out var value)
+                && Guid.TryParse(value, out var headerGuid))
+            {
+                return headerGuid;
+            }
+        }
+
+        return Guid.NewGuid();
+    }
+
+    private static bool TryGetHeaderValue(HttpResponseMessage response, string headerName, out string? value)
+    {
+        if (response.Headers.TryGetValues(headerName, out var headerValues))
+        {
+            value = headerValues.FirstOrDefault();
+            return !string.IsNullOrWhiteSpace(value);
+        }
+
+        if (response.Content.Headers.TryGetValues(headerName, out var contentValues))
+        {
+            value = contentValues.FirstOrDefault();
+            return !string.IsNullOrWhiteSpace(value);
+        }
+
+        value = null;
+        return false;
     }
 }

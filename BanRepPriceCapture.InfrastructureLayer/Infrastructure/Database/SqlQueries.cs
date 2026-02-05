@@ -10,6 +10,7 @@ internal static class SqlQueries
     public static string GetDtfDailyPricePayloadsByFlowId => GetQuery(nameof(GetDtfDailyPricePayloadsByFlowId));
     public static string InsertProcessingState => GetQuery(nameof(InsertProcessingState));
     public static string UpdateProcessingStateStatus => GetQuery(nameof(UpdateProcessingStateStatus));
+    public static string RecordProcessingStateSend => GetQuery(nameof(RecordProcessingStateSend));
     public static string GetProcessingStateByFlowId => GetQuery(nameof(GetProcessingStateByFlowId));
     public static string GetLastProcessingStateByCaptureDate => GetQuery(nameof(GetLastProcessingStateByCaptureDate));
     public static string ListFailedOrIncompleteExecutions => GetQuery(nameof(ListFailedOrIncompleteExecutions));

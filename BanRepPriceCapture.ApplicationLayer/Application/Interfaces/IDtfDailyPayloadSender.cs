@@ -4,5 +4,5 @@ namespace BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
 
 public interface IDtfDailyPayloadSender
 {
-    Task SendAsync(IReadOnlyCollection<DtfDailyPricePayload> payload, CancellationToken ct);
+    Task<Guid> SendAsync(IReadOnlyCollection<DtfDailyPricePayload> payload, CancellationToken ct);
 }

@@ -36,6 +36,14 @@ set status = @Status,
     last_updated_at = @LastUpdatedAt
 where flow_id = @FlowId;
 
+-- name: RecordProcessingStateSend
+update "dtf_processing_states"
+set downstream_send_id = @DownstreamSendId,
+    status = @Status,
+    error_message = @ErrorMessage,
+    last_updated_at = @LastUpdatedAt
+where flow_id = @FlowId;
+
 -- name: GetProcessingStateByFlowId
 select
     capture_date as "CaptureDate",
