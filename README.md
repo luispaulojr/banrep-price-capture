@@ -21,6 +21,11 @@ The solution follows a layered, modular architecture with inward-only dependenci
 3. `DtfSeriesWorkflow` invokes `DtfDailyJob` or `DtfWeeklyJob`, which pull SDMX data and return the response.
 4. Errors are mapped to HTTP responses; unexpected failures trigger a notification.
 
+### Operational reprocessing endpoint
+1. Operator requests `POST /dtf-daily/reprocess` with `captureDate` and/or `flowId` query parameters.
+2. The API validates that at least one parameter is present and verifies an existing execution before triggering `DtfDailyCaptureWorkflow.ReprocessAsync`.
+3. A `202 Accepted` response is returned once the reprocess request is accepted, preserving FlowId correlation for logs and downstream operations.
+
 ### RabbitMQ asynchronous flow (daily capture)
 1. A message is published to the queue configured in `DtfDailyCapture:QueueName`.
 2. `DtfDailyRabbitConsumer` starts a scoped workflow per message and extracts FlowId from `MessageId`.
