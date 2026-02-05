@@ -1,3 +1,4 @@
+using System.Text.Json;
 using BanRepPriceCapture.ApplicationLayer.Application.Models;
 using BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
 using BanRepPriceCapture.ApplicationLayer.Application.Workflows;
@@ -78,11 +79,14 @@ public static class DtfEndpoints
 
             await workflow.ReprocessAsync(request.CaptureDate, request.FlowId, ct);
 
-            return Results.Accepted(new
+            var response = new
             {
+                message = "Reprocessamento iniciado.",
                 flowId = resolvedFlowId,
                 captureDate = resolvedCaptureDate
-            });
+            };
+            
+            return Results.Accepted(JsonSerializer.Serialize(response));
         });
 
         app.MapGet("/dtf-weekly", async (

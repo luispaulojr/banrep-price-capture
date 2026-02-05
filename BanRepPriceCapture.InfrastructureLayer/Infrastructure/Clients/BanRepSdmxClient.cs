@@ -77,7 +77,7 @@ public sealed class BanRepSdmxClient(
             "BanRepSdmxClient.StreamDtfDailyAsync",
             ct);
 
-        await using var httpResponse = response;
+        using var httpResponse = response;
         await using var stream = await ValidateAndGetStreamAsync(httpResponse, ct);
         if (stream is null)
         {
