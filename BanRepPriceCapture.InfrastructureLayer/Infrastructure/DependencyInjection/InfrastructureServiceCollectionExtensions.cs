@@ -155,6 +155,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddTransient<BearerTokenHandler>();
 
         services.AddScoped<IDtfDailyPriceRepository, DtfDailyPriceRepository>();
+        services.AddScoped<IProcessingStateRepository, ProcessingStateRepository>();
 
         services.AddSingleton<INotificationService>(sp =>
         {

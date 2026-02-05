@@ -72,6 +72,7 @@ public sealed class DtfDailyRabbitConsumer(
         var messageId = args.BasicProperties?.MessageId;
         var flowId = flowIdProvider.CreateFromMessageId(messageId);
         flowContext.SetFlowId(flowId);
+        flowContext.SetCaptureDate(DateOnly.FromDateTime(DateTime.UtcNow));
         var body = Encoding.UTF8.GetString(args.Body.ToArray());
 
         using var scope = scopeFactory.CreateScope();

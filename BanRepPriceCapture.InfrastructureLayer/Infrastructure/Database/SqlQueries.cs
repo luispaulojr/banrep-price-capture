@@ -7,6 +7,11 @@ internal static class SqlQueries
     private static readonly IReadOnlyDictionary<string, string> Queries = LoadQueries();
 
     public static string InsertDtfDailyPrice => GetQuery(nameof(InsertDtfDailyPrice));
+    public static string InsertProcessingState => GetQuery(nameof(InsertProcessingState));
+    public static string UpdateProcessingStateStatus => GetQuery(nameof(UpdateProcessingStateStatus));
+    public static string GetProcessingStateByFlowId => GetQuery(nameof(GetProcessingStateByFlowId));
+    public static string GetLastProcessingStateByCaptureDate => GetQuery(nameof(GetLastProcessingStateByCaptureDate));
+    public static string ListFailedOrIncompleteExecutions => GetQuery(nameof(ListFailedOrIncompleteExecutions));
 
     private static string GetQuery(string name)
     {
