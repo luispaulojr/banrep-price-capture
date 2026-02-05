@@ -1,6 +1,10 @@
 using BanRepPriceCapture.ApplicationLayer.Application.Models;
+using BanRepPriceCapture.ApplicationLayer.Application.Interfaces;
 using BanRepPriceCapture.ApplicationLayer.Application.Workflows;
 using BanRepPriceCapture.ApplicationLayer.Exceptions;
+using BanRepPriceCapture.ApplicationLayer.Flow;
+using BanRepPriceCapture.ApplicationLayer.Logging;
+using BanRepPriceCapture.DomainLayer.Domain.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 
@@ -24,6 +28,61 @@ public static class DtfEndpoints
             {
                 return HandleException(ex);
             }
+        });
+
+        app.MapPost("/dtf-daily/reprocess", async (
+            [AsParameters] DtfDailyReprocessRequest request,
+            DtfDailyCaptureWorkflow workflow,
+            IProcessingStateRepository stateRepository,
+            IFlowContextAccessor flowContext,
+            IStructuredLogger logger,
+            CancellationToken ct) =>
+        {
+            if (request.CaptureDate is null && request.FlowId is null)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "captureDate ou flowId deve ser informado."
+                });
+            }
+
+            ProcessingState? state = null;
+            if (request.FlowId is not null)
+            {
+                state = await stateRepository.GetByFlowId(request.FlowId.Value, ct);
+            }
+
+            if (state is null && request.CaptureDate is not null)
+            {
+                state = await stateRepository.GetLastStatusByCaptureDate(request.CaptureDate.Value, ct);
+            }
+
+            if (state is null)
+            {
+                return Results.NotFound(new
+                {
+                    error = "Execucao nao encontrada para os parametros informados."
+                });
+            }
+
+            var resolvedFlowId = request.FlowId ?? state.FlowId;
+            var resolvedCaptureDate = request.CaptureDate ?? state.CaptureDate;
+
+            flowContext.SetFlowId(resolvedFlowId);
+            flowContext.SetCaptureDate(resolvedCaptureDate);
+
+            logger.LogInformation(
+                method: "DtfEndpoints.ReprocessDailyAsync",
+                description: "Reprocessamento DTF Daily solicitado.",
+                message: $"flowId={resolvedFlowId} captureDate={resolvedCaptureDate:yyyy-MM-dd}");
+
+            await workflow.ReprocessAsync(request.CaptureDate, request.FlowId, ct);
+
+            return Results.Accepted(new
+            {
+                flowId = resolvedFlowId,
+                captureDate = resolvedCaptureDate
+            });
         });
 
         app.MapGet("/dtf-weekly", async (
@@ -65,4 +124,6 @@ public static class DtfEndpoints
                 statusCode: StatusCodes.Status500InternalServerError)
         };
     }
+
+    private sealed record DtfDailyReprocessRequest(DateOnly? CaptureDate, Guid? FlowId);
 }
